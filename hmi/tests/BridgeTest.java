@@ -1,4 +1,5 @@
 import local.pcm4.ProjectionBridge;
+import org.dsi.ifc.displaymanagement.DisplayContext;
 import de.audi.atip.hmi.view.IDisplayManager;
 import de.audi.atip.hmi.view.IDisplayListener;
 import java.io.*;
@@ -25,9 +26,18 @@ public final class BridgeTest {
     public static void main(String[] args) throws Exception {
         File directory = new File(args[0]); directory.mkdirs();
         File ready = new File(directory, "ready"), disable = new File(directory, "disable");
-        System.setProperty("pcm4.cluster.context", "900"); // SYNTHETIC TEST PROFILE ONLY
+        System.setProperty("pcm4.cluster.context", "900"); // Selected development profile
         System.setProperty("pcm4.cluster.marker", ready.getAbsolutePath());
         System.setProperty("pcm4.cluster.disable", disable.getAbsolutePath());
+        DisplayContext original=new DisplayContext(72,new int[]{33});
+        DisplayContext[] declared=ProjectionBridge.contexts(new DisplayContext[]{original});
+        require(ProjectionBridge.projectionDisplayables(900)[0]==60 &&
+                ProjectionBridge.projectionDisplayables(72)==null,"private context displayable lookup");
+        require(ProjectionBridge.listener(900,listener)!=listener && ProjectionBridge.listener(72,listener)==listener,
+                "private context must not send base modulo79 acknowledgement to stock listener");
+        require(declared.length==2 && declared[0]==original && declared[1].getId()==900 &&
+                declared[1].getDisplayableList().length==1 && declared[1].getDisplayableList()[0]==60,
+                "append projection context preserving factory declarations");
         final IDisplayManager[] manager = new IDisplayManager[1];
         manager[0] = (IDisplayManager)Proxy.newProxyInstance(BridgeTest.class.getClassLoader(),
             new Class[] {IDisplayManager.class}, new InvocationHandler() {

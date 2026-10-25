@@ -47,6 +47,8 @@ public final class PatchPorsche implements Opcodes {
         require(HASH.equals(digest(input)), "Converted Porsche class hash mismatch");
         ClassNode type = new ClassNode(); new ClassReader(input).accept(type, 0);
         require(OWNER.equals(type.name) && BASE.equals(type.superName), "Unexpected Porsche inheritance");
+        type.fields.add(new FieldNode(ACC_PUBLIC|ACC_STATIC|ACC_FINAL,
+            "PCM4_MU1476_PROJECTION_PATCH","I",null,1));
         MethodNode target = null;
         for (MethodNode method : type.methods) if (method.name.equals("switchContext") && method.desc.equals(DESC)) {
             require(target == null, "Duplicate switchContext"); target = method;
@@ -78,13 +80,67 @@ public final class PatchPorsche implements Opcodes {
         hook.add(new MethodInsnNode(INVOKESTATIC, BRIDGE, "select",
             "(Lde/audi/atip/hmi/view/IDisplayManager;IIILde/audi/atip/hmi/view/IDisplayListener;)I", false));
         hook.add(new VarInsnNode(ISTORE, 1));
+        hook.add(new VarInsnNode(ILOAD, 1)); hook.add(new VarInsnNode(ALOAD, 3));
+        hook.add(new MethodInsnNode(INVOKESTATIC,BRIDGE,"listener",
+            "(ILde/audi/atip/hmi/view/IDisplayListener;)Lde/audi/atip/hmi/view/IDisplayListener;",false));
+        hook.add(new VarInsnNode(ASTORE,3));
         target.instructions.insertBefore(receiver, hook);
-        // This class predates mandatory StackMapTable frames. Preserve version
-        // and control flow; compute stack sizes without loading vendor classes.
+        MethodNode definitions = null;
+        for (MethodNode method : type.methods)
+            if (method.name.equals("defineContexts") && method.desc.equals("()V")) definitions=method;
+        require(definitions != null, "Context declarations missing");
+        int returns=0;
+        for (AbstractInsnNode node : definitions.instructions.toArray()) if (node.getOpcode()==RETURN) {
+            InsnList extension=new InsnList();
+            extension.add(new VarInsnNode(ALOAD,0));
+            extension.add(new VarInsnNode(ALOAD,0));
+            extension.add(new FieldInsnNode(GETFIELD,BASE,"dc","[Lorg/dsi/ifc/displaymanagement/DisplayContext;"));
+            extension.add(new MethodInsnNode(INVOKESTATIC,BRIDGE,"contexts",
+                "([Lorg/dsi/ifc/displaymanagement/DisplayContext;)[Lorg/dsi/ifc/displaymanagement/DisplayContext;",false));
+            extension.add(new FieldInsnNode(PUTFIELD,BASE,"dc","[Lorg/dsi/ifc/displaymanagement/DisplayContext;"));
+            definitions.instructions.insertBefore(node,extension); returns++;
+        }
+        require(returns==1,"Expected exactly one defineContexts return");
+        // Base getContext indexes the dense factory array by ID. Our private
+        // context is appended for DSI declaration, so handle its public lookup
+        // without allocating hundreds of null entries in that declaration list.
+        for (MethodNode method : type.methods)
+            require(!(method.name.equals("getDisplayables") && method.desc.equals("(I)[I")),
+                    "Unexpected Porsche displayable lookup override");
+        MethodNode lookup=new MethodNode(ACC_PUBLIC,"getDisplayables","(I)[I",null,null);
+        LabelNode factory=new LabelNode();
+        lookup.instructions.add(new VarInsnNode(ILOAD,1));
+        lookup.instructions.add(new MethodInsnNode(INVOKESTATIC,BRIDGE,"projectionDisplayables","(I)[I",false));
+        lookup.instructions.add(new InsnNode(DUP));
+        lookup.instructions.add(new JumpInsnNode(IFNULL,factory));
+        lookup.instructions.add(new InsnNode(ARETURN));
+        lookup.instructions.add(factory);lookup.instructions.add(new InsnNode(POP));
+        lookup.instructions.add(new VarInsnNode(ALOAD,0));lookup.instructions.add(new VarInsnNode(ILOAD,1));
+        lookup.instructions.add(new MethodInsnNode(INVOKESPECIAL,BASE,"getDisplayables","(I)[I",false));
+        lookup.instructions.add(new InsnNode(ARETURN));lookup.maxLocals=2;type.methods.add(lookup);
+        // jxe2jar promotes classes with synthetic accessors to v49. J9's
+        // foundation runtime needs v48; ASM represents Synthetic as its legacy
+        // attribute. Reject actual Java5+ features before normalizing the version.
+        require(type.signature==null && (type.access&(ACC_ENUM|ACC_ANNOTATION))==0,
+                "Unexpected Java5 class feature");
+        require(type.visibleAnnotations==null && type.invisibleAnnotations==null,
+                "Unexpected class annotations");
+        for(FieldNode field:type.fields) require(field.signature==null && (field.access&ACC_ENUM)==0,
+                "Unexpected Java5 field feature");
+        for(MethodNode method:type.methods) {
+            require(method.signature==null && (method.access&(ACC_BRIDGE|ACC_VARARGS))==0,
+                    "Unexpected Java5 method feature");
+            require(method.visibleAnnotations==null && method.invisibleAnnotations==null,
+                    "Unexpected method annotations");
+            for(AbstractInsnNode node:method.instructions.toArray())
+                require(node.getOpcode()!=INVOKEDYNAMIC,"Unexpected invokedynamic");
+        }
+        type.version=V1_4;
+        // Preserve original branches and recompute stack sizes without loading OEM classes.
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS); type.accept(writer);
         byte[] patched = writer.toByteArray();
         ClassNode verified = new ClassNode(); new ClassReader(patched).accept(verified, 0);
-        for (MethodNode method : verified.methods) if (method.name.equals("switchContext") && method.desc.equals(DESC))
+        for (MethodNode method : verified.methods) if ((method.name.equals("switchContext") && method.desc.equals(DESC)) || method.name.equals("defineContexts") || method.name.equals("getDisplayables"))
             new Analyzer<BasicValue>(new BasicVerifier()).analyze(verified.name, method);
         Path classes = Paths.get(args[1]);
         require(Files.isRegularFile(classes.resolve(BRIDGE + ".class")), "Bridge class missing");
@@ -97,7 +153,7 @@ public final class PatchPorsche implements Opcodes {
             jar.putNextEntry(new JarEntry(OWNER + ".class")); jar.write(patched); jar.closeEntry();
             for (Path file : bridgeFiles) {
                 String name = classes.relativize(file).toString().replace(File.separatorChar, '/');
-                require(name.startsWith("local/pcm4/ProjectionBridge"), "Unexpected addon class: " + name);
+                require((name.startsWith("local/pcm4/ProjectionBridge") || name.equals("local/pcm4/LoadProbe.class")), "Unexpected addon class: " + name);
                 jar.putNextEntry(new JarEntry(name)); jar.write(Files.readAllBytes(file)); jar.closeEntry();
             }
         }

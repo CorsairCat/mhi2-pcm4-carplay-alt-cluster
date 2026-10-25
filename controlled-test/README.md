@@ -1,11 +1,15 @@
 # PCM4 MU1476 controlled test kit
 
-Start with [TESTING.md](TESTING.md) for the ordered stages and exact commands.
+Start with [ONBOARDING_TEST_GUIDE.md](ONBOARDING_TEST_GUIDE.md) for the complete
+first-visit workflow, pass/fail gates, integration tests and recovery.
+[TESTING.md](TESTING.md) details the standalone kit stages.
 
 **Ready now: read-only vehicle evidence collection. Rendering is not deployment
 ready:** a cross-compiled QNX target binary is now present locally under `bin/`,
-but has not executed under QNX or on the vehicle. The cluster output device,
-free layer, priority and HMI ownership are unresolved. This is not an SD firmware
+but has not executed under QNX or on the vehicle. The development profile selects
+NvSS output **0**, displayable **60**, and context **900 containing [60]**.
+Output0 follows the offline Porsche448x448 boot-profile trace; active topology,
+priority, geometry and integrated HMI ownership still need validation. This is not an SD firmware
 update or an automatic installer. Existing shell access is required. No vendor
 firmware, Audi binary or startup modification is included.
 

@@ -148,3 +148,13 @@ Consequently, 61 or another unused byte-sized ID is technically plausible but no
 `private/analysis/mu1476-output-context/` contains original-byte hash/instruction/record evidence in `route-proof.json`, ARMv7 disassembly of the NvDC and EFS driver copies, dmdt/core disassembly, PLT resolution records and exploratory string-reference lists. Exploratory xrefs are search aids, not independent proof; control flow was reviewed at the addresses cited above.
 
 The repository's `tools/make_elf_analysis_copy.py` adds analysis section metadata to section-stripped QNX ELF files without changing original code bytes. All such copies are analysis-only and must never be executed or deployed. Disassemble with an ARMv7 triple so MOVW/MOVT immediates decode correctly. Existing `tools/compare_audi_interfaces.py:file_offset` translates original virtual addresses to file offsets. `route-proof.json` records original instruction words in both driver variants and the original 19-word Porsche mode records for independent checking.
+
+## Implementation follow-up — 2026-10-25
+
+The analysis above records the evidence and open questions at discovery time.
+The offline integration candidate now implements guarded session hooks, a
+separate renderer and readiness publisher, context900=[60] declaration, Java
+handover, and private packaging/rollback. See
+[the current implementation and validation record](PCM4_MU1476_DISPLAY_PORT.md)
+and [the test procedure](integration/README.md). These implementations do not
+convert conditional firmware findings into vehicle runtime proof.

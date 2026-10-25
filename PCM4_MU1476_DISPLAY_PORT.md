@@ -4,7 +4,7 @@ Started: 2026-10-24, at the owner's request. This is the third project document,
 
 ## 1. Scope and current status
 
-**The first offline native renderer core is implemented and host-tested. A functioning on-car display port is not yet established.** Work targets the supplied `MHI2_US_POG11_K5186_1`, MU1476 reference. The owner's car remains MU0809 unless separately confirmed otherwise. No reference firmware, native library, collector or modification has been run on a vehicle.
+**The offline integration candidate is implemented, host-tested and QNX-cross-compiled; see section20 and `integration/README.md`. A functioning on-car display port is not yet established.** Work targets the supplied `MHI2_US_POG11_K5186_1`, MU1476 reference. The owner's car remains MU0809 unless separately confirmed otherwise. No reference firmware, native library, collector or modification has been run on a vehicle.
 
 The first milestone is to display a controlled video source on the verified Porsche cluster route, then integrate auxiliary wired CarPlay video and Porsche HMI ownership. Wireless is excluded. Native turn guidance and speed limits remain preferred later integration work on the car's guidance path.
 
@@ -12,13 +12,16 @@ The first milestone is to display a controlled video source on the verified Pors
 
 | Artifact | Purpose / status |
 | --- | --- |
-| `profiles/pcm4-mu1476-display.json` | Reference identity, 448×448 raster candidate and conditional route; unresolved runtime fields explicitly null. Development profile, not consumed by an installer. |
+| `profiles/pcm4-mu1476-display.json` | Selected output0/displayable60/context900 and initial448x448 presentation; generated native header and private package use this profile. Runtime unverified. |
 | `native/pcm4_mu1476_display.h` / `.c` | Original renderer core with an injected NVIDIA API table: initialize, open, configure, set geometry, submit a complete access unit, close. No vendor code included. |
 | `tools/audit_mu1476_display.py` | Hash-pinned static recheck of native argument, lifecycle, visibility and output-enumeration evidence, import calls, error string and six video exports. Refuses other binaries. |
 | `tools/capture_pcm4_display_state.sh` | Future manual QNX collector using only display-manager queries `gs`, `gd`, `gc`. Not run on a unit. |
 | `tests/test_pcm4_display.c` | Host mocks for native lifecycle, geometry packing, frame bounds and failure cleanup. |
 
-No QNX SDK/compiler is installed in this workspace. There is no target binary, automatic startup change, patched HMI, receiver hook or installation package from this phase.
+A QNX Docker toolchain is established on `home` under ~/dev/pcm4-qnx-toolchain.
+Native target binaries, a patched HMI addon and a private integration package are
+now built. Older sections below record earlier milestones; section20 is the
+current implementation status. Nothing has been installed on a car.
 
 ## 2. Concrete incompatibility discovered: stream type
 
@@ -914,6 +917,172 @@ NvDC/TVMR/NvMedia. This is an offline-proven mapping conditional on the Porsche
 mode profile being active. The conditional route records output0; the executable
 renderer output remains unspecified pending the active topology check.
 No vehicle action or automatic rendering has been enabled by this selection.
+
+## 19. Consolidated development configuration — 2026-10-25
+
+After owner review, the canonical profile and controlled-test reference both
+select **NvSS output0, displayable60, context900 with[60], Java terminal1**.
+This supersedes section18's unspecified executable-profile output. The profile
+retains vehicle_runtime_verified=false and the conditional boot-profile evidence.
+Java launch properties select context900 and the existing readiness/disable
+paths; they are recorded configuration, not automatically applied by Java.
+Priority, coded dimensions/fps, destination rectangle and iPhone descriptor
+geometry remain unspecified rather than inventing values not yet chosen.
+
+The staged documentation and local ZIP were synchronized. Still missing:
+acknowledged context declaration; native readiness publisher and one Java owner;
+Porsche auxiliary-advertisement/SETUP/socket lifecycle and stock-AES binding;
+validated J9 loading/startup/rollback; selected geometry/priority; then target
+execution and actual visibility, priority and restoration tests. Crypto caller
+and derivation seams and conditional output enumeration are now traced offline,
+so they are no longer discovery blockers. This update installs nothing on a car.
+
+## 20. Offline integration candidate completed — 2026-10-25
+
+This section supersedes earlier missing-implementation lists. Sources are
+original project code; derived vendor outputs remain ignored under private/.
+The selected route is output0/displayable60/context900=[60], terminal1.
+Initial presentation is448x448 at30fps, priority100, full-canvas destination;
+phone safe area348x368@(60,30) follows the recovered Porsche layout. These are
+explicit development values and remain physically unvalidated. Physical
+millimetres are omitted unless supplied through the hook's paired environment
+settings; no measurement was invented.
+
+### Implemented pipeline
+
+- `pcm4_airplay_hook.c`: retains actual stock session association at the reviewed
+  security setter, captures the successful16-byte master key, advertises a cloned
+  auxiliary descriptor while preserving stock arrays/features, delegates stock
+  SETUP then adds the111 response/listening port. Uses exact symbol-offset and
+  prologue guards. It supports SETUP-before-START and SETUP-after-START, requests
+  showUI for an established auxiliary session, rejects missing/mismatched keys
+  and duplicate111 descriptors, filters private-only teardown from stock and
+  filters111 out of mixed teardown. Its conservative main110 teardown policy
+  also releases auxiliary output. Keys are wiped and never logged.
+- `pcm4_crypto.c/.h`: uses reviewed stock derivation and continuous CTR API with
+  aligned512-byte opaque storage, in-place updates and cleanup.
+- `pcm4_arm_hook.c/.h`: startup-only guarded ARM trampolines, RW-to-RX text
+  transitions and partial-install rollback. No live injection/thread suspension
+  or automatic MAP_FIXED fallback. Denied text permissions disable projection;
+  failure to restore executable permission exits126 to avoid executing RW-only
+  stock text. Target cache/permission/constructor behavior remains untested.
+- Hook's bounded single-session TCP worker decrypts Screen messages and sends
+  them only to127.0.0.1:19820. No firmware decoder is opened by the hook.
+- `pcm4_projection_runtime.c`: separate NvSS owner, exclusive loopback receiver,
+  per-connection generation, configuration/IDR gating, target NvSS identity check
+  before loading, decoder lifecycle, timeout and signal cleanup. Timestamp0 is
+  retained until target timing semantics can be measured. No continuous decoder
+  recovery is attempted after a failed stream; it waits for a new connection.
+- `pcm4_ready.c/.h`: atomic frame-driven marker publisher. External-owner mode
+  in projection.c bypasses native context takeover entirely. Java is the sole
+  context owner; accepted frames publish readiness, errors/timeout withdraw it.
+- Java patch extends the normal factory declaration with900=[60], disables on
+  collision, supplies public getDisplayables lookup for the added context, and
+  preserves raw KDK request/listener state for restoration. A private listener
+  absorbs projection acknowledgements: the base method otherwise applies%79 to
+  immediate listener contexts. A worker controls nav72..77 only and restores
+  after stale markers independently of the renderer.
+- `LoadProbe.java` checks the marker field and links the patched class without
+  initializing OEM HMI. The patched converter class is normalized from49 to48
+  after rejecting Java5 features; addon classes are all Java1.4-compatible by
+  file version. This remains a desktop/J9-loader candidate, not target proof.
+
+### Configuration and packaging
+
+`tools/generate_pcm4_profile.py` generates native/pcm4_profile.h from the canonical
+JSON; the controlled-test profile stays identical. The private package builder
+hash-guards dio_manager, changes only its unused Jenkins-build RPATH into an
+absolute hook dependency, preserves original dependency order and emits a
+conditional VMOPTIONS addition to the stock lsd.sh. The stock jars-before-JXE
+mechanism supplies the addon; no full converted30941-class runtime is substituted.
+
+`integration/install.sh` validates source payloads and original target hashes,
+snapshots all originals before publication, installs disabled, and rolls back
+partial publication. Restore refuses later edits, clears activation, requests
+Java release, restores originals and removes added files. It does not remount,
+restart, kill services or contact the car. `integration/control.sh` exposes
+explicit probe, renderer, enable and disable operations. The renderer is started
+manually for testing rather than installed as an unattended service.
+
+`private/releases/pcm4-mu1476-integration-r3.zip` is the current private stage3/4
+candidate; the original Stage0–2 ZIP is refreshed separately. The private r1/r2 builds are superseded. No proprietary payload is added to Git.
+
+### Verification and limits
+
+Host ASan/UBSan tests passed framing/session isolation, external-owner readiness,
+marker format/removal, crypto-adapter state continuity, actual CF retaining
+fixtures, descriptor preservation, missing/mismatched keys, start/setup ordering,
+auxiliary setup/teardown, and zero leaked fixture objects. Actual localhost
+runtime tests with a synthetic NvSS shared library passed receive/decode,
+atomic markers, reconnect, frame timeout and SIGTERM cleanup. SHA256 matches
+Python hashlib across padding/block boundaries.
+
+Pinned Java8 Docker tests passed declaration extension/collision, private lookup
+and listeners, raw KDK restoration, page precedence, malformed/stale/disable
+markers, class linking and the loader probe. The addon remains disabled without
+configuration. All native targets cross-compiled with the QNX ARM toolchain;
+strong imports were checked against supplied vehicle libc/socket exports and
+ARM EABI5 softfp metadata. No target executable or vendor ARM code ran here.
+
+An isolated-filesystem test passed installer preflight, original-hash rejection,
+rollback after deliberately failed partial publication, refusal to overwrite a
+later edit, and complete restoration. Archive CRC and per-file contents passed.
+These checks do not prove real QNX memory protection, constructor ordering,
+J9 initialization, iPhone negotiation/crypto or physical scanout.
+
+The remaining gates require target evidence: verify active library/profile and
+attachment; run QNX mocks; test disabled dependency loading and J9 probe; inspect
+actual context900 declaration; then enable wired projection and test geometry,
+main-screen behavior, page/warning priority and recovery. Native turn arrows and
+speed limits remain the separately scoped guidance follow-on, not supplied by
+this video/handover candidate.
+
+### Final offline build record — 2026-10-25
+
+The final private integration archive is `pcm4-mu1476-integration-r2.zip`.
+Its SHA256 is
+`0046cd2e61d973045a662519baa771525b578f161c2935917ce393d082c04e56`.
+The refreshed Stage0–2 archive contains21 components plus SHA256SUMS, including
+four QNX mock executables; its SHA256 is
+`270816f197abe593c3828f14ca14d278d62fa5c442e65e3017f5177b394e201b`.
+Both archives are under ignored `private/releases/`.
+
+The final hook is `28ca9a3c3d43ff9d6f16c5a4e51a7c824a68355b33184fce4f50400a61717f16`;
+the Java addon is `7a36427f2c76b1af4fcb560affd0da6f2c32078613d8c1a8f1438a81fc54d85a`.
+The four integration static-import reports are in `private/remote-qnx/` as
+`runtime-imports.json`, `hook-imports.json`, `verify-imports.json`, and
+`hook-mock-imports.json`. Each passed, and each recorded binary hash matches the
+final build. `loader-delta-check.json` under the private HMI analysis directory
+confirms that the loader delta changes only the RPATH string/tag and preserves
+all original dependency names and order.
+
+The final installer regression also executes only our generated VMOPTIONS block
+with activation absent/present, rejects a stale activation flag before creating
+a backup, and verifies that rollback removes temporary publication files.
+Original vendor startup scripts and ARM executables are never executed by these
+host checks. Python/shell syntax and `git diff --check` passed. The private
+archives were checked against current binary bytes and the canonical profile.
+No files were installed on a vehicle, and no commit or push was performed in
+this implementation pass.
+
+### On-car onboarding guide and documentation refresh
+
+`controlled-test/ONBOARDING_TEST_GUIDE.md` now provides the complete vehicle
+visit: baseline, QNX mocks, read-only route/identity evidence, bounded pattern,
+disabled installation/loading, wired iPhone integration, page handover/recovery,
+disable/restore and results to return. It distinguishes phone-side showUI from
+PCM context900=[60] and makes actual vehicle pass/fail gates explicit.
+
+The same guide is included in both private archives. Integration r3 supersedes
+r2 with documentation only; installed payload files and binaries are identical.
+The controlled kit now contains22 components plus SHA256SUMS. Historical r2
+hashes above describe that earlier build; the refreshed archives are:
+
+- `pcm4-mu1476-integration-r3.zip`: `624b6a27812e2b6c8e5a8cab1f24c90e3ca6ab9a4c292109d0e518197f9dd60a`
+- `pcm4-mu1476-controlled-test.zip`: `5ccc1a1bb0aafa8960d102e7cb7312e63a743d92b9452756933d7c3b74ac468b`
+
+Both archives passed CRC, every SHA256SUMS entry and exact guide-content checks.
+The installer/rollback regression passed against r3. No car was contacted.
 
 ## Local unattended continuation (superseded)
 

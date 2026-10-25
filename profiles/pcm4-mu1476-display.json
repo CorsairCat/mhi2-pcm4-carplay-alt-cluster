@@ -11,12 +11,23 @@
   "tvmr_sha256": "ba854f58db4190da47f41638df761feb74510d2bd3f77293da90f0df7de5991e",
   "nvdc_sha256": "3385097792315eee4dcdc706210704353bd598bf2fa3b515719cc2f0a32bcfe7",
   "boot_initializer_sha256": "368fff98a3ac2d18d0cc38ee779792385dc04560b62a08233e53c5a3cf0d088e",
-  "transport_raster_candidate": {"width": 448, "height": 448},
+  "transport_raster_candidate": {
+    "width": 448,
+    "height": 448
+  },
   "hmi_geometry_evidence": {
     "provider": "de/audi/app/navi/porsche/map/gui/layout/LayoutProviderPAGMainKombi",
-    "screen": {"width": 448, "height": 448},
-    "navigation_visible_area": {"x": 60, "y": 30, "width": 348, "height": 368},
-    "scope": "Static Porsche FPK layout branch; not yet selected as CarPlay safe area or video destination"
+    "screen": {
+      "width": 448,
+      "height": 448
+    },
+    "navigation_visible_area": {
+      "x": 60,
+      "y": 30,
+      "width": 348,
+      "height": 368
+    },
+    "scope": "Static Porsche FPK layout branch; provisionally reused for phone safe area; native video destination remains full canvas"
   },
   "conditional_display_route": {
     "configuration": "2_lvds",
@@ -28,41 +39,103 @@
     "runtime_verified": false
   },
   "renderer": {
-    "nvss_output_device": null,
+    "nvss_output_device": 0,
     "layer": 60,
-    "priority": null,
+    "priority": 100,
     "layer_selection": "Owner-selected Audi-style displayable 60 (factory HUD_MAP_VIEW); runtime untested",
     "stream_type": 0,
-    "visibility_setter": {"update_flag_offset": 60, "value_offset": 61, "show_value": 0, "hide_value": 1, "runtime_verified": false},
+    "visibility_setter": {
+      "update_flag_offset": 60,
+      "value_offset": 61,
+      "show_value": 0,
+      "hide_value": 1,
+      "runtime_verified": false
+    },
     "open_word_at_20": 0,
-    "coded_width": null,
-    "coded_height": null,
-    "fps": null,
-    "destination_rect": null,
-    "maximum_access_unit_bytes": 512000
+    "coded_width": 448,
+    "coded_height": 448,
+    "fps": 30,
+    "destination_rect": {
+      "x": 0,
+      "y": 0,
+      "width": 448,
+      "height": 448
+    },
+    "maximum_access_unit_bytes": 512000,
+    "presentation_selection": "Initial offline test profile: full 448x448 canvas, priority100; physical clipping and priority unverified"
   },
   "ownership": {
     "evidence": "Static MU1476 HMI bytecode; runtime untested",
     "java_terminal": 1,
     "context": 900,
-    "projection_displayables": [60],
+    "projection_displayables": [
+      60
+    ],
     "selection": "Owner-selected separate context 900 containing displayable 60; must be declared before switching",
     "runtime_verified": false,
-    "stock_navigation_contexts": [72, 73, 74, 75, 76, 77],
+    "java_system_properties": {
+      "pcm4.cluster.context": "900",
+      "pcm4.cluster.marker": "/tmp/pcm4-cluster-ready",
+      "pcm4.cluster.disable": "/tmp/pcm4-cluster-disable"
+    },
+    "configuration_application": "Private integration package emits these JVM properties conditionally while explicitly enabled; target loading remains unvalidated",
+    "stock_navigation_contexts": [
+      72,
+      73,
+      74,
+      75,
+      76,
+      77
+    ],
     "hmi_class": "de/audi/tghu/fwhmi/porsche/DisplayManagerMIB2PorscheHigh",
     "switch_method_descriptor": "(IILde/audi/atip/hmi/view/IDisplayListener;)V",
     "switch_method_rom_offset": "0x1d4d380",
     "hook_before_super_call_pc": 42,
     "stock_context_displayables": {
-      "72": [33], "73": [22], "74": [22, 33],
-      "75": [], "76": [58], "77": [22, 58]
+      "72": [
+        33
+      ],
+      "73": [
+        22
+      ],
+      "74": [
+        22,
+        33
+      ],
+      "75": [],
+      "76": [
+        58
+      ],
+      "77": [
+        22,
+        58
+      ]
     }
   },
-  "carplay": {"safe_area": null, "physical_width_mm": null, "physical_height_mm": null},
+  "carplay": {
+    "safe_area": {
+      "x": 60,
+      "y": 30,
+      "width": 348,
+      "height": 368
+    },
+    "physical_width_mm": null,
+    "physical_height_mm": null,
+    "geometry_selection": "Provisional safe area from Porsche FPK navigation layout; physical millimetres omitted until measured"
+  },
   "blockers": [
-    "Read active display topology and map viewport; do not equate display-manager ID with NvSS output device.",
-    "Implement declaration of selected context 900 containing displayable 60 and readiness coordination.",
-    "Verify visibility and kd stream-property behavior before connecting the renderer to live output.",
-    "QNX ARM cross-build and host tests passed; QNX execution and J9 loading remain untested."
-  ]
+    "Validate target startup/ARM text permissions and actual hook call ordering; compiled hooks are a vehicle-test candidate.",
+    "Validate J9 loading of converted classes and stock startup; staged loader is offline-tested only.",
+    "Confirm active output0/448x448 profile, displayable60 ownership and native declaration acknowledgement.",
+    "Validate iPhone acceptance of descriptor, session lifecycle, crypto, geometry, priority and stock restoration.",
+    "Physical display width/height in millimetres require measurement; descriptor currently omits them."
+  ],
+  "airplay_sha256": "bd0fff7f7345d58493611d637bd6bce6362ca01d3b44c5be1e320c4f5c9c3c9c",
+  "runtime": {
+    "plaintext_bind": "127.0.0.1",
+    "plaintext_port": 19820,
+    "frame_timeout_ms": 1500,
+    "java_marker_ttl_ms": 3000,
+    "enable_environment": "PCM4_ENABLE=1"
+  }
 }

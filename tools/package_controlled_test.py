@@ -6,12 +6,12 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 KIT = ROOT / 'controlled-test'
-FILES = '''README.md TESTING.md collect.sh run-mock-tests.sh verify_collection.py
+FILES = '''README.md TESTING.md ONBOARDING_TEST_GUIDE.md collect.sh run-mock-tests.sh verify_collection.py
 make_sample.py build.sh reference-profile.json
 src/pcm4_mu1476_display.c src/pcm4_mu1476_display.h
 src/pcm4_nv_binding.c src/pcm4_nv_binding.h src/render_test.c
 bin/pcm4-render-test bin/qnx-mocks/display-mock-test
-bin/qnx-mocks/projection-mock-test bin/qnx-mocks/binding-mock-test
+bin/qnx-mocks/projection-mock-test bin/qnx-mocks/binding-mock-test bin/qnx-mocks/hook-mock-test
 bin/qnx-mocks/mock.so bin/qnx-mocks/missing.so media/pattern.pc4t'''.split()
 
 def main():

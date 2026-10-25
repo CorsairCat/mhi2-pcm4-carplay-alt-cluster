@@ -120,3 +120,13 @@ CarPlay to another output, establish alpha/z-order, or prove what area the HMI
 producer covers. Stock CarPlay video/session control supplies the smartphone
 surface; the Java context selects membership. Copying78 to the cluster would
 not request a separate navigation presentation from the phone.
+
+## Implementation follow-up — 2026-10-25
+
+The analysis above records the evidence and open questions at discovery time.
+The offline integration candidate now implements guarded session hooks, a
+separate renderer and readiness publisher, context900=[60] declaration, Java
+handover, and private packaging/rollback. See
+[the current implementation and validation record](PCM4_MU1476_DISPLAY_PORT.md)
+and [the test procedure](integration/README.md). These implementations do not
+convert conditional firmware findings into vehicle runtime proof.

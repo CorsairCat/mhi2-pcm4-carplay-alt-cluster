@@ -1,5 +1,10 @@
 #include "pcm4_projection.h"
 #include "pcm4_screen_receiver.h"
+#include "pcm4_ready.h"
+#include "pcm4_crypto.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -197,9 +202,71 @@ static void screen_tests(void)
     assert(pcm4_screen_receiver_feed(&r,generation,wire,128,10)==-1 && r.failed);
     assert(!pcm4_display_close(&d));
 }
+static uint64_t published_frames, published_generation;
+static int publish_failed;
+static int publish_test(void *opaque,uint64_t generation,uint64_t frames)
+{
+    (void)opaque;
+    if (frames && publish_failed) return -1;
+    published_generation=generation; published_frames=frames; return 0;
+}
+static void external_tests(void)
+{
+    struct pcm4_nv_api api={open_mock,configure_mock,get_mock,set_mock,decode_mock,close_mock};
+    struct pcm4_display d={0};
+    struct pcm4_display_config c={0,448,448,100,60,{448,448,30},{0,0,448,448}};
+    struct pcm4_projection p={0};
+    assert(!pcm4_display_open(&d,&api,&c));
+    assert(!pcm4_projection_init_external(&p,&d,publish_test,NULL,100));
+    assert(!pcm4_projection_begin(&p,1,0));
+    assert(!pcm4_projection_configure(&p,1,config,sizeof(config),1));
+    assert(!pcm4_projection_feed(&p,1,idr,sizeof(idr),0,2,scratch,sizeof(scratch)));
+    assert(shown && published_frames==1 && published_generation==1);
+    assert(!pcm4_projection_tick(&p,101) && shown);
+    assert(!pcm4_projection_tick(&p,102) && !shown && !published_frames && !p.stream.emit);
+    assert(!pcm4_projection_begin(&p,2,103));
+    assert(!pcm4_projection_configure(&p,2,config,sizeof(config),104));
+    publish_failed=1;
+    assert(pcm4_projection_feed(&p,2,idr,sizeof(idr),0,105,scratch,sizeof(scratch))==-1);
+    assert(!shown && !published_frames && !p.stream.emit); publish_failed=0;
+    assert(!pcm4_display_close(&d));
+}
+static void marker_tests(void)
+{
+    char directory[128],path[256],text[96]={0};
+    struct pcm4_ready ready; FILE *file;
+    snprintf(directory,sizeof(directory),"/tmp/pcm4-ready-test-%ld",(long)getpid());
+    assert(!mkdir(directory,0700)); snprintf(path,sizeof(path),"%s/ready",directory);
+    assert(!pcm4_ready_init(&ready,path));
+    assert(!pcm4_ready_publish(&ready,0,0));
+    assert(!pcm4_ready_publish(&ready,123,456));
+    file=fopen(path,"rb"); assert(file); assert(fread(text,1,sizeof(text)-1,file)==sizeof("PCM4READY1\n123\n456\n")-1); fclose(file);
+    assert(!strcmp(text,"PCM4READY1\n123\n456\n"));
+    assert(pcm4_ready_publish(&ready,UINT64_MAX,1)==-1);
+    assert(!pcm4_ready_publish(&ready,123,0) && access(path,F_OK)!=0);
+    assert(!rmdir(directory));
+}
+static unsigned ctr_position,ctr_final;
+static void derive_test(const void *key,size_t n,uint64_t id,unsigned char *out,unsigned char *iv)
+{ assert(n==16 && id==UINT64_C(0x123456789abcdef0)); memcpy(out,key,16); memset(iv,2,16); }
+static int ctr_init(void *ctx,const unsigned char *key,const unsigned char *iv)
+{ (void)ctx; assert(key[0]==1 && iv[0]==2); ctr_position=0; return 0; }
+static int ctr_update(void *ctx,const void *input,size_t n,void *output)
+{ size_t i; unsigned char *p=output; (void)ctx; assert(input==output); for(i=0;i<n;i++) p[i]^=(unsigned char)ctr_position++; return 0; }
+static void ctr_end(void *ctx) { (void)ctx; ctr_final++; }
+static void crypto_tests(void)
+{
+    struct pcm4_crypto crypto={0}; struct pcm4_crypto_api api={derive_test,ctr_init,ctr_update,ctr_end};
+    unsigned char key[16]={1},bytes[4]={0};
+    assert(!pcm4_crypto_begin(&crypto,&api,key,UINT64_C(0x123456789abcdef0)));
+    assert(!pcm4_crypto_decrypt(&crypto,bytes,2));
+    assert(!pcm4_crypto_decrypt(&crypto,bytes+2,2));
+    assert(bytes[0]==0 && bytes[1]==1 && bytes[2]==2 && bytes[3]==3);
+    pcm4_crypto_end(&crypto); assert(ctr_final==1 && !crypto.initialized);
+}
 int main(void)
 {
-    stream_tests(); handover_tests(); integration_tests(); screen_tests();
+    stream_tests(); handover_tests(); integration_tests(); screen_tests(); external_tests(); marker_tests(); crypto_tests();
     puts("PASS: AVCC/IDR/session isolation; handover recovery; fragmented/coalesced Screen crypto/decode/show/restore");
     return 0;
 }

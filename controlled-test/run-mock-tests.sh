@@ -7,5 +7,6 @@ cd "$(dirname "$0")"
 base=$PWD/bin/qnx-mocks
 "$base/display-mock-test"
 "$base/projection-mock-test"
+"$base/hook-mock-test"
 "$base/binding-mock-test" "$base/mock.so" "$base/missing.so"
 echo 'PASS: QNX mock stages. No real video decode, HMI switch or display tested.'

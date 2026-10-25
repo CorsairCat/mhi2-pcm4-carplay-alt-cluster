@@ -4,11 +4,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import de.audi.atip.hmi.view.IDisplayManager;
 import de.audi.atip.hmi.view.IDisplayListener;
+import org.dsi.ifc.displaymanagement.DisplayContext;
 
 /** Original Porsche bridge. Disabled unless a reviewed context is configured.
  * Hook runs AFTER KDK mapping but also receives the saved RAW entry context.
  * No disk I/O or display-manager calls occur on the intercepted hook path.
- * This class does not declare contexts, choose a layer or change nav metadata.
+ * Context extension is invoked during stock initialization before DSI declaration.
  */
 public final class ProjectionBridge implements Runnable {
     private static final int TERMINAL = 1;
@@ -18,6 +19,12 @@ public final class ProjectionBridge implements Runnable {
         "pcm4.cluster.marker", "/tmp/pcm4-cluster-ready"));
     private static final File DISABLE = new File(System.getProperty(
         "pcm4.cluster.disable", "/tmp/pcm4-cluster-disable"));
+    private static final IDisplayListener PROJECTION_LISTENER = new IDisplayListener() {
+        public void activeContext(int context, int terminal) { }
+    };
+    public static IDisplayListener listener(int selected, IDisplayListener original) {
+        return CONTEXT > 0 && selected == CONTEXT ? PROJECTION_LISTENER : original;
+    }
     private static final ThreadLocal INTERNAL = new ThreadLocal();
     private static volatile Request latest;
     private static volatile boolean ready;
@@ -39,6 +46,23 @@ public final class ProjectionBridge implements Runnable {
             // Profile allocation is external. Reject common stock range outright.
             return context > 255 && context <= 65535 ? context : -1;
         } catch (Throwable ignored) { return -1; }
+    }
+    public static int[] projectionDisplayables(int context) {
+        return CONTEXT > 0 && !stopped && context == CONTEXT ? new int[] {60} : null;
+    }
+    /** Called from patched defineContexts before stock initDSI declares them.
+     * Return the factory array unchanged on collision, with takeover disabled. */
+    public static DisplayContext[] contexts(DisplayContext[] stock) {
+        if (CONTEXT < 0 || stock == null || stopped) return stock;
+        for (int i=0;i<stock.length;i++) {
+            if (stock[i] != null && stock[i].getId() == CONTEXT) {
+                stopped=true; ready=false; return stock;
+            }
+        }
+        DisplayContext[] result=new DisplayContext[stock.length+1];
+        System.arraycopy(stock,0,result,0,stock.length);
+        result[stock.length]=new DisplayContext(CONTEXT,new int[] {60});
+        return result;
     }
     private static boolean navigation(int context) { return context >= 72 && context <= 77; }
     private static synchronized void startWorker() {

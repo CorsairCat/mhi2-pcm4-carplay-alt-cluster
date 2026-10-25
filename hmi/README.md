@@ -3,8 +3,9 @@
 `ProjectionBridge.java` is original Java 1.4-compatible code for the actual
 converted Porsche display-manager interface. `PatchPorsche.java` generates an
 addon containing this bridge and ONE patched Porsche class. No JXE is rewritten,
-no factory map buffer is overwritten, and no class loader/startup is installed.
-The addon is **disabled by default**. Runtime access and installation are pending.
+no factory map buffer is overwritten. A private application-level installation
+candidate now exists; see `integration/README.md`. Nothing is installed on a car.
+The addon is **disabled by default**.
 
 The design selects a separately declared projection context only for terminal 1
 navigation requests (post-remap contexts 72–77). It preserves both the raw
@@ -18,7 +19,12 @@ The patcher accepts only converted class SHA-256
 checks direct inheritance, the synchronized signature, exactly one superclass
 call and its argument setup. It saves the raw context at entry and injects
 selection before the post-KDK superclass call. Original branches are retained;
-ASM recomputes stack maxima and analyzes the modified method's stack/locals.
+it also extends `defineContexts` with900=[60], adds private-context displayable
+lookup, and uses a private listener for projection acknowledgements. Factory
+listeners are retained for restoration because the base class reduces callback
+context values modulo79. ASM recomputes stack maxima and analyzes modified
+methods. The converter's v49 synthetic-accessor class is normalized to v48 only
+after rejecting Java5 features; bridge/probe classes also target Java1.4.
 The converted JAR is private, derived from the supplied hash-pinned JXE using
 jxe2jar revision `9eeb45bbf14bf8afe3452c7be96a4d1f0206a286`.
 
@@ -35,20 +41,25 @@ directory, recorded by `hmi-tools/latest-build.txt`. No existing addon is replac
 The generated addon contains a vendor-derived class; keep it under ignored
 private storage, not git or the Stage 0–2 test archive.
 
-Future runtime configuration:
+Selected future launch properties are recorded in
+`profiles/pcm4-mu1476-display.json` under `ownership.java_system_properties`.
+The JSON is not read by Java directly. The package builder emits a conditional
+VMOPTIONS block in the staged stock startup script; it supplies the values as
+JVM `-D` options only after explicit enablement. Current runtime configuration interface:
 
 - `pcm4.cluster.context`: explicitly reviewed context in range 256–65535;
   missing/invalid configuration disables the bridge. This range is a project
   constraint, not evidence that every ID is supported/free. The owner selected
-  **context 900 containing displayable 60** for this port. Future launch options
-  should explicitly set `-Dpcm4.cluster.context=900` after declaring that context.
-  The bridge remains disabled when the property is absent; selection alone does
-  not register a context or enable the addon.
+  **context900 containing displayable60** for this port. With the property
+  supplied, the patched defineContexts appends the declaration before the stock
+  DSI call. A conflicting declaration leaves stock intact and disables takeover.
+  The bridge remains disabled when the property is absent.
 - `pcm4.cluster.marker`: absolute renderer heartbeat path, default
   `/tmp/pcm4-cluster-ready`. The required ASCII content is `PCM4READY1`, positive
   decimal session generation and decoded-frame count, each followed by newline.
   A marker older than three seconds, malformed content, a clock reversal, or
-  the disable file causes release. A native producer is not connected yet.
+  the disable file causes release. The separate native runtime now publishes
+  this protocol atomically after accepted decoding.
 - `pcm4.cluster.disable`: override marker, default `/tmp/pcm4-cluster-disable`.
 
 The native renderer must publish readiness only after accepted decoding and must
@@ -57,7 +68,8 @@ of the renderer, so loss of heartbeat can restore stock even after renderer
 death. It cannot recover an HMI JVM/thread that has itself failed. A stock use of
 the configured candidate context stops ownership rather than overriding it.
 
-Remaining: context/displayable allocation and registration; marker producer;
-validated J9 class-loader/overlay packaging; full startup/rollback procedure;
-actual warnings/page priority and map restoration checks on the vehicle. Stock
+The private bundle includes startup/rollback and a LoadProbe that checks patched
+class selection without initializing OEM HMI. Desktop JVM tests pass; actual J9
+loading, native declaration acknowledgement, warnings/page priority and map
+restoration remain vehicle checks. Stock
 guidance labels/arrows/speed limits are not modified by this bridge.

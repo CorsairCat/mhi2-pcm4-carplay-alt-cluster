@@ -65,19 +65,27 @@ def main():
     parser.add_argument('binary', type=Path)
     parser.add_argument('--libc', type=Path, required=True)
     parser.add_argument('--report', type=Path)
+    parser.add_argument('--dependency', type=Path, action='append', default=[])
+    parser.add_argument('--shared', action='store_true')
     args = parser.parse_args()
     result = inspect(args.binary)
     exports = symbols(args.libc)
+    provided = set(exports)
+    result['dependencies'] = {}
+    for dependency in args.dependency:
+        provided.update(symbols(dependency))
+        result['dependencies'][dependency.name] = hashlib.sha256(dependency.read_bytes()).hexdigest()
     result['libc_sha256'] = hashlib.sha256(args.libc.read_bytes()).hexdigest()
     result['missing_strong_imports_in_libc'] = sorted(set(result['strong_imports']) - exports.keys())
-    # Current standalone C test driver should need libc only. A new dependency
-    # requires an explicit review instead of silently broadening this gate.
+    result['missing_strong_imports'] = sorted(set(result['strong_imports']) - provided)
+    allowed = {args.libc.name} | {p.name for p in args.dependency}
+    # Every additional provider is explicit; default remains libc-only.
     result['static_gate_passes'] = bool(
-        result['interpreter'] == '/usr/lib/ldqnx.so.2'
-        and result['elf_type'] == 2 and result['flags'] >> 24 == 5
+        result['interpreter'] == (None if args.shared else '/usr/lib/ldqnx.so.2')
+        and result['elf_type'] == (3 if args.shared else 2) and result['flags'] >> 24 == 5
         and not result['flags'] & 0x400  # hard-float ABI marker
-        and result['needed'] == ['libc.so.3']
-        and not result['missing_strong_imports_in_libc'])
+        and bool(result['needed']) and set(result['needed']) <= allowed
+        and not result['missing_strong_imports'])
     result['vehicle_runtime_verified'] = False
     text = json.dumps(result, indent=2)
     if args.report:

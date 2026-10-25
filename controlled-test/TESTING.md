@@ -1,6 +1,9 @@
 # Staged test procedure
 
-Current delivery: compiled ARM/QNX renderer, three compiled mock tests, two
+Use [ONBOARDING_TEST_GUIDE.md](ONBOARDING_TEST_GUIDE.md) for the complete vehicle
+visit, including the private integration candidate, result checklist and rollback.
+
+Current delivery: compiled ARM/QNX renderer, four compiled mock tests, two
 synthetic shared libraries, original two-second sample and collection scripts.
 No phone receiver hook or Java HMI patch is installed by this package. Use
 existing shell access. Unzip on the Mac and copy the extracted folder to the
@@ -15,9 +18,10 @@ sh run-mock-tests.sh > /absolute/removable-media/stage0.txt 2>&1
 echo $?
 ```
 
-Expected: status `0`, three test PASS messages, then the stage PASS message.
+Expected: status `0`, four test PASS messages, then the stage PASS message.
 This checks native C execution, mocked renderer lifecycle, auxiliary conversion,
-handover policy and loading our synthetic libraries. It never loads the vehicle
+handover policy, synthetic CF session/dictionary lifecycle with a temporary
+socket listener, and loading our synthetic libraries. It never loads the vehicle
 NvSS library and cannot prove real H.264 decode or physical display behavior.
 If execution fails (permission denied, missing interpreter/symbol/library,
 assertion or crash), save the full log and stop before a real output test.
@@ -48,10 +52,15 @@ Return the collection directories and notes privately for review. The SHA-256
 check validates reference identity only; it does not select a renderer output,
 free layer or HMI context. Do not put vehicle library copies in git.
 
-## Stage 2 — controlled real video output: pending configuration
+## Stage 2 — controlled real video output: pending runtime review
 
-Do this only after Stage 0 passes and Stage 1 establishes actual NvSS output
-device, free layer, priority, geometry and compatible runtime-library paths.
+The selected development profile is NvSS output **0**, displayable **60**, and
+projection context **900 containing [60]**. These JSON selections are reference
+configuration; the standalone driver still takes explicit command-line arguments.
+
+Do this after Stage0 passes and Stage1 confirms the selected output/topology and
+library identities. Priority, geometry, displayable behavior and compatible
+runtime-library paths still need review.
 There is no ready-to-copy execution command with guessed values. The driver's
 full argument order is:
 
@@ -73,9 +82,12 @@ page selection, warning display and main-screen CarPlay after the test.
 
 ## Stages 3 and 4 — auxiliary stream and automatic HMI handover
 
-These stages are **not included as runnable vehicle modifications**. They need
-the Porsche receiver hook/negotiation/decryption adapter and Java HMI bridge.
-The offline native conversion/handover core is included in Stage 0 mocks only.
+The original Stage0–2 kit does not install these stages. A separate private
+integration candidate is now built, with hook, runtime, Java addon, installer
+and rollback; see `integration/README.md` in the repository and its private
+archive. It has not executed on the vehicle. Run the ordered target loading
+checks there before enabling it. The Stage0 tests include the hook's synthetic
+session/dictionary lifecycle; they do not execute real stock AES or NvSS.
 
 Planned sequence: first negotiate/capture the extra iPhone stream while stock
 CarPlay keeps working; then decode it through the verified output; finally

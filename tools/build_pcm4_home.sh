@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 tar -cf - controlled-test/src native tests/test_pcm4_projection.c \
-    tests/test_pcm4_display.c tests/test_pcm4_binding.c tests/mock_nvss_library.c \
+    tests/test_pcm4_display.c tests/test_pcm4_binding.c tests/mock_nvss_library.c tests/test_pcm4_hook.c \
     tools/build_pcm4_qnx.sh | ssh -o BatchMode=yes home \
     'mkdir -p ~/dev/pcm4-qnx-toolchain/pcm4-project; tar -xf - -C ~/dev/pcm4-qnx-toolchain/pcm4-project'
 ssh -o BatchMode=yes home 'bash -s' <<'REMOTE'
@@ -23,7 +23,7 @@ scp home:dev/pcm4-qnx-toolchain/pcm4-project/controlled-test/bin/pcm4-render-tes
     controlled-test/bin/pcm4-render-test
 scp -r home:dev/pcm4-qnx-toolchain/pcm4-project/qnx-out/. private/remote-qnx/
 mkdir -p controlled-test/bin/qnx-mocks
-for name in display-mock-test projection-mock-test binding-mock-test mock.so missing.so; do
+for name in display-mock-test projection-mock-test binding-mock-test hook-mock-test mock.so missing.so; do
     cp "private/remote-qnx/$name" "controlled-test/bin/qnx-mocks/$name"
 done
 vehicle_libc=${PCM4_VEHICLE_LIBC:-private/analysis/mu1476-libc/files/proc/boot/libc.so.3}

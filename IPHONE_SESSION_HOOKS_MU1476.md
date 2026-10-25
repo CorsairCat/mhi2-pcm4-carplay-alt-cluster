@@ -176,3 +176,13 @@ session keys or decrypted private content.
 No vehicle test has been performed. The findings remove uncertainty about
 several local ABI/data-flow details; they cannot prove the iPhone accepts our
 secondary-display descriptor or that the hook loads in the actual process.
+
+## Implementation follow-up — 2026-10-25
+
+The analysis above records the evidence and open questions at discovery time.
+The offline integration candidate now implements guarded session hooks, a
+separate renderer and readiness publisher, context900=[60] declaration, Java
+handover, and private packaging/rollback. See
+[the current implementation and validation record](PCM4_MU1476_DISPLAY_PORT.md)
+and [the test procedure](integration/README.md). These implementations do not
+convert conditional firmware findings into vehicle runtime proof.

@@ -27,11 +27,13 @@ stock=/work/pcm4-stock.jar
 osgi=/work/jxe2jar/libs/org.osgi.framework-1.10.0.jar
 asm=/work/deps/asm-9.7.jar:/work/deps/asm-tree-9.7.jar:/work/deps/asm-analysis-9.7.jar
 javac -source 1.4 -target 1.4 -Xlint:-options -cp "$stock:$osgi" \
-    -d /out/classes /source/src/local/pcm4/ProjectionBridge.java
+    -d /out/classes /source/src/local/pcm4/ProjectionBridge.java /source/src/local/pcm4/LoadProbe.java
 javac -cp "$asm" -d /out/tools /source/tools/PatchPorsche.java
 java -Xverify:all -cp "/out/tools:$asm" PatchPorsche "$stock" /out/classes /out/pcm4-cluster-addon.jar
-javac -cp "/out/pcm4-cluster-addon.jar:$stock:$osgi" -d /out/tests /source/tests/BridgeTest.java /source/tests/DisabledBridgeTest.java
+javac -cp "/out/pcm4-cluster-addon.jar:$stock:$osgi" -d /out/tests /source/tests/BridgeTest.java /source/tests/DisabledBridgeTest.java /source/tests/ContextCollisionTest.java
 java -Xverify:all -cp "/out/tests:/out/pcm4-cluster-addon.jar:$stock:$osgi" DisabledBridgeTest
+java -Xverify:all -cp "/out/tests:/out/pcm4-cluster-addon.jar:$stock:$osgi" ContextCollisionTest
+java -Xverify:all -cp "/out/pcm4-cluster-addon.jar:$stock:$osgi" local.pcm4.LoadProbe
 java -Xverify:all -cp "/out/tests:/out/pcm4-cluster-addon.jar:$stock:$osgi" BridgeTest /out/runtime
 javap -verbose -classpath /out/pcm4-cluster-addon.jar local.pcm4.ProjectionBridge > /out/bridge-class.txt
 javap -c -p -classpath /out/pcm4-cluster-addon.jar de.audi.tghu.fwhmi.porsche.DisplayManagerMIB2PorscheHigh > /out/patched-porsche.txt
