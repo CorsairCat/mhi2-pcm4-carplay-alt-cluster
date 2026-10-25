@@ -70,6 +70,20 @@ fail:
     return rc;
 }
 
+int pcm4_display_set_visible(struct pcm4_display *d, int visible)
+{
+    unsigned char attrs[64];
+    if (!d || !d->handle || !d->api || (visible != 0 && visible != 1))
+        return -1;
+    memset(attrs, 0, sizeof(attrs));
+    attrs[60] = 1;
+    /* Setter byte 61 is inverted into command 8's enable byte. Enabling
+     * creates/binds output; disabling unbinds/destroys it. Do not use GetAttribs
+     * here: its byte 61 reports the internal enabled state, not setter input. */
+    attrs[61] = (unsigned char)!visible;
+    return d->api->set_attributes(d->handle, attrs);
+}
+
 int pcm4_display_decode(struct pcm4_display *d, const void *data, size_t size,
                         uint64_t timestamp)
 {

@@ -62,5 +62,9 @@ struct pcm4_display {
 int pcm4_display_open(struct pcm4_display *, const struct pcm4_nv_api *,
                       const struct pcm4_display_config *);
 int pcm4_display_decode(struct pcm4_display *, const void *, size_t, uint64_t);
+/* Explicit output binding control; does not select/own an HMI context. Static
+ * MU1476 trace only, not validated on the vehicle. visible must be 0 or 1.
+ * Do not copy the queried byte 61 back as a setter: it has inverted polarity. */
+int pcm4_display_set_visible(struct pcm4_display *, int visible);
 int pcm4_display_close(struct pcm4_display *);
 #endif

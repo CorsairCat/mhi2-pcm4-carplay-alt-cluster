@@ -45,10 +45,28 @@ CHECKS = [
     (0xe4e8, 0xebffcb69, 'sets property from stored layer word'),
     (0xe308, 0xe301178f, 'boolean property ID 0x178f'),
     (0xe30c, 0xebffcc22, 'sets boolean property true on layer-validity path'),
+    (0x1684, 0xe5d3307c, 'get: load internal enabled-state byte'),
+    (0x1688, 0xe5c1303d, 'get: report enabled-state at public byte 61'),
+    (0x17a0, 0xe5d5203d, 'set: load public byte 61'),
+    (0x17a8, 0x13a03000, 'set: nonzero public value becomes disabled zero'),
+    (0x17ac, 0x05cd304d, 'set: zero public value queues enabled one'),
+    (0x17b0, 0x15cd304d, 'set: nonzero public value queues disabled zero'),
+    (0x98d4, 0xe5d63041, 'control: load internal enabled payload'),
+    (0x98f0, 0xe3a03008, 'control: select queued command 8'),
+    (0x8650, 0xe58d3050, 'register: store handler in callback slot 8'),
+    (0x8878, 0xffff49b0, 'handler literal: GOT-relative RenderCmd_OnDispControl'),
+    (0xcaf4, 0xebffd20d, 'registration copies command callback array'),
+    (0xcf10, 0xe7923103, 'dispatcher indexes callback array by command'),
+    (0xcf20, 0xe1a01009, 'dispatcher passes message payload after 12-byte header'),
+    (0xcf24, 0xe12fff33, 'dispatcher calls registered callback'),
+    (0x72ec, 0xe5c020b1, 'display callback stores enabled byte'),
+    (0x7304, 0xebffff3d, 'display callback applies output state when initialized'),
+    (0x701c, 0xe3570000, 'output-control tests enabled byte'),
+    (0x7020, 0x1a000027, 'nonzero selects create/bind path'),
 ]
 
 
-def plt_imports(data):
+def plt_imports(data, plt_start=0x1264):
     """Resolve this reviewed ARM PLT, checking each thunk's actual GOT address."""
     phoff = struct.unpack_from('<I', data, 28)[0]
     entsize, count = struct.unpack_from('<HH', data, 42)
@@ -68,7 +86,7 @@ def plt_imports(data):
         return ((value >> rotation) | (value << ((32 - rotation) % 32))) & 0xffffffff
     for i in range(tags[2] // 8):
         got, info = struct.unpack_from('<II', data, relocations + i * 8)
-        address = 0x1264 + 12 * i  # reviewed .plt start and stride for this hash
+        address = plt_start + 12 * i  # caller supplies reviewed start; GOT is checked below
         first, second, third = struct.unpack_from('<3I', data, file_offset(data, address))
         if (info & 255 != 22 or first & 0xfffff000 != 0xe28fc000 or
             second & 0xfffff000 != 0xe28cc000 or third & 0xfffff000 != 0xe5bcf000):
@@ -87,6 +105,8 @@ def main():
     parser.add_argument('--report', type=Path, default=ROOT / 'private/analysis/mu1476-display-port/abi-audit.json')
     parser.add_argument('--kd', type=Path, default=ROOT / 'private/analysis/mu1476-aio-mifs50/files/lib/libKD.so')
     parser.add_argument('--nvmedia', type=Path, default=ROOT / 'private/analysis/mu1476-nvmedia/files/armle/usr/lib/libnvmedia.so')
+    parser.add_argument('--tvmr', type=Path, default=ROOT / 'private/analysis/mu1476-tvmr/files/lib/libnvtvmr.so')
+    parser.add_argument('--nvdc', type=Path, default=ROOT / 'private/analysis/mu1476-nvdc/files/lib/libnvdc.so')
     args = parser.parse_args()
     profile = json.loads((ROOT / 'profiles/pcm4-mu1476-display.json').read_text())
     data = args.library.read_bytes()
@@ -105,7 +125,12 @@ def main():
     calls = {}
     for address, expected in ((0xe424, 'kdInitializeNV'), (0xe3a8, 'kdTerminateNV'),
                               (0xe4d0, 'kdCreateStreamNV'), (0xe4e8, 'kdSetStreamPropertyivNV'),
-                              (0xe30c, 'kdSetStreamPropertybvNV')):
+                              (0xe30c, 'kdSetStreamPropertybvNV'),
+                              (0x7044, 'NvMediaVideoMixerUnbindOutput'),
+                              (0x704c, 'NvMediaVideoOutputDestroy'),
+                              (0x7148, 'NvMediaVideoOutputCreate'),
+                              (0x7164, 'NvMediaVideoMixerBindOutput'),
+                              (0xcaf4, 'memcpy')):
         word = struct.unpack_from('<I', data, file_offset(data, address))[0]
         displacement = word & 0xffffff
         if displacement & 0x800000: displacement -= 0x1000000
@@ -128,7 +153,16 @@ def main():
             (0x7acc, 0xeaffffb9), (0x7a84, 0xe5832000))),
         ('nvmedia', args.nvmedia, 'nvmedia_sha256', (
             (0x7cb4, 0xea0002b6), (0x87b8, 0xebffe65d), (0x8800, 0xe2413cb3),
-            (0x8834, 0xe5057018), (0x888c, 0xe5058018), (0x8894, 0xe505a018)))):
+            (0x8834, 0xe5057018), (0x888c, 0xe5058018), (0x8894, 0xe505a018))),
+        ('tvmr', args.tvmr, 'tvmr_sha256', (
+            (0x397d4, 0xebff25c8), (0x397e8, 0xebff2623),
+            (0x39884, 0xebff2659), (0x3992c, 0xe3530004),
+            (0x39944, 0x95933008), (0x39964, 0xebff2612),
+            (0x399a4, 0xebff252a))),
+        ('nvdc', args.nvdc, 'nvdc_sha256', (
+            (0x11dc, 0xe3001502), (0x11e4, 0xe34c1014),
+            (0x11fc, 0xebfffde2), (0x120c, 0xe5843000),
+            (0x1214, 0xe5843004), (0x121c, 0xe5843008)))):
         raw = path.read_bytes()
         sha = hashlib.sha256(raw).hexdigest()
         if sha != profile[key]:
@@ -139,12 +173,31 @@ def main():
         ok = all(row['expected'] == row['observed'] for row in rows)
         additional[name] = dict(path=str(path), sha256=sha, checks=rows, passed=ok)
         passed = passed and ok
+    tvmr = args.tvmr.read_bytes()
+    tvmr_imports = plt_imports(tvmr, plt_start=0x2e3c)
+    expected_imports = {0x2efc: 'nvdcOpen', 0x307c: 'nvdcQueryDisplays',
+                        0x31f0: 'nvdcQueryDisplayInfo', 0x31b4: 'nvdcQueryHeadStatus',
+                        0x2e54: 'nvdcGetMode', 0x2ec0: 'nvdcClose'}
+    tvmr_calls = {hex(at): dict(expected=name, observed=tvmr_imports.get(at))
+                  for at, name in expected_imports.items()}
+    got = (0x397f4 + struct.unpack_from('<I', tvmr, file_offset(tvmr, 0x39a18))[0]) & 0xffffffff
+    table_va = (got + struct.unpack_from('<I', tvmr, file_offset(tvmr, 0x39a1c))[0] + 8) & 0xffffffff
+    table = list(struct.unpack_from('<5I', tvmr, file_offset(tvmr, table_va)))
+    mapping_ok = table == [0xb303, 0xb302, 0xb304, 0xb306, 0xb301]
+    mapping_ok &= all(row['expected'] == row['observed'] for row in tvmr_calls.values())
+    # Registration resolves GOT+literal to callback 8; no raw absolute pointer exists.
+    handler = (got_base + struct.unpack_from('<I', data, file_offset(data, 0x8878))[0]) & 0xffffffff
+    passed = passed and mapping_ok and handler == 0x7280
     report = dict(reference=str(args.library), sha256=digest,
                   checked_instruction_count=len(checked), checks=checked,
                   exports={n: hex(exports[n]) if n in exports else None for n in names},
                   stream_type_error=dict(address=hex(message_va), text=message),
                   window_manager_import_calls=calls,
                   additional_libraries=additional,
+                  visibility_command_handler=hex(handler),
+                  tvmr_output_mapping=dict(table_address=hex(table_va),
+                                           driver_class_to_tvmr_type=[hex(x) for x in table],
+                                           imports=tvmr_calls, passed=mapping_ok),
                   reviewed_checks_passed=passed, deployment_ready=False,
                   caveat='Static reviewed access checks only. No runtime, full ABI, visibility or output mapping validation.')
     args.report.parent.mkdir(parents=True, exist_ok=True)

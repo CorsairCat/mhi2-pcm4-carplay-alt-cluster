@@ -73,9 +73,21 @@ int main(void)
     assert(pcm4_display_decode(&d, "test", 512001, 0) == -1 && decoded == 1);
     assert(pcm4_display_decode(&d, NULL, 4, 0) == -1);
     assert(pcm4_display_decode(&d, "test", 0, 0) == -1);
+    assert(pcm4_display_set_visible(&d, 1) == 0);
+    for (i = 0; i < 64; i++) assert(attributes[i] == (i == 60));
+    assert(pcm4_display_set_visible(&d, 0) == 0);
+    for (i = 0; i < 64; i++) assert(attributes[i] == (i == 60 || i == 61));
+    i = stage;
+    assert(pcm4_display_set_visible(&d, 2) == -1 && stage == i);
+    assert(pcm4_display_set_visible(&d, -1) == -1 && stage == i);
+    fail_stage = stage + 1;
+    assert(pcm4_display_set_visible(&d, 1) == -77);
+    assert(d.handle == &token && closed == 0); /* failure does not discard owner */
     assert(pcm4_display_close(&d) == 0 && closed == 1);
     assert(pcm4_display_close(&d) == 0 && closed == 1);
     assert(pcm4_display_decode(&d, "test", 4, 123) == -1);
+    assert(pcm4_display_set_visible(&d, 1) == -1);
+    assert(pcm4_display_set_visible(NULL, 1) == -1);
     for (i = 1; i <= 4; i++) {
         reset(); fail_stage = i;
         assert(pcm4_display_open(&d, &api, &c) == -77);
@@ -90,6 +102,6 @@ int main(void)
     assert(pcm4_display_open(&d, &api, &c) == -1 && stage == 0);
     c.output_device = 1; c.video.fps = 0;
     assert(pcm4_display_open(&d, &api, &c) == -1 && stage == 0);
-    puts("PASS: renderer lifecycle, four failure stages, geometry packing, frame and viewport bounds");
+    puts("PASS: lifecycle, four failure stages, geometry, frame bounds and visibility polarity/failure");
     return 0;
 }

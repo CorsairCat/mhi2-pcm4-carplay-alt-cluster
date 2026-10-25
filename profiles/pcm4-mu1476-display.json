@@ -8,6 +8,8 @@
   "nvss_sha256": "58d19e127e77b0973149fe83d7c44fd973fd76ab57fb99108c9e76d3f73f5430",
   "kd_sha256": "d44df0bb660b2dbcec8f2b52af45c2450fcfb93501d00481e22b675b55cb6cb3",
   "nvmedia_sha256": "2ef0bec48e063e9a71bcae0f724365898059b6ad7eb5ea0c30b11df0970f9d5f",
+  "tvmr_sha256": "ba854f58db4190da47f41638df761feb74510d2bd3f77293da90f0df7de5991e",
+  "nvdc_sha256": "3385097792315eee4dcdc706210704353bd598bf2fa3b515719cc2f0a32bcfe7",
   "boot_initializer_sha256": "368fff98a3ac2d18d0cc38ee779792385dc04560b62a08233e53c5a3cf0d088e",
   "transport_raster_candidate": {"width": 448, "height": 448},
   "hmi_geometry_evidence": {
@@ -27,6 +29,7 @@
     "layer": null,
     "priority": null,
     "stream_type": 0,
+    "visibility_setter": {"update_flag_offset": 60, "value_offset": 61, "show_value": 0, "hide_value": 1, "runtime_verified": false},
     "open_word_at_20": 0,
     "coded_width": null,
     "coded_height": null,

@@ -14,7 +14,7 @@ The first milestone is to display a controlled video source on the verified Pors
 | --- | --- |
 | `profiles/pcm4-mu1476-display.json` | Reference identity, 448×448 raster candidate and conditional route; unresolved runtime fields explicitly null. Development profile, not consumed by an installer. |
 | `native/pcm4_mu1476_display.h` / `.c` | Original renderer core with an injected NVIDIA API table: initialize, open, configure, set geometry, submit a complete access unit, close. No vendor code included. |
-| `tools/audit_mu1476_display.py` | Hash-pinned static recheck of 24 reviewed ARM instructions, the referenced stream-type error string and six video exports. Refuses other binaries. |
+| `tools/audit_mu1476_display.py` | Hash-pinned static recheck of native argument, lifecycle, visibility and output-enumeration evidence, import calls, error string and six video exports. Refuses other binaries. |
 | `tools/capture_pcm4_display_state.sh` | Future manual QNX collector using only display-manager queries `gs`, `gd`, `gc`. Not run on a unit. |
 | `tests/test_pcm4_display.c` | Host mocks for native lifecycle, geometry packing, frame bounds and failure cleanup. |
 
@@ -105,7 +105,7 @@ The core first zeroes the block, queries existing attributes, replaces geometry 
 
 ## 5. Renderer core behavior and limits
 
-The caller must provide a zero-initialized state, resolved display configuration and API table. Opening validates rectangle bounds using subtraction to avoid unsigned overflow, then initializes graphics, opens video with stream type zero, configures video and applies geometry. Every initialization failure unwinds the completed stages. Close releases video and terminates the core's graphics session, and tolerates a second close.
+The caller must provide a zero-initialized state, resolved display configuration and API table. Opening validates rectangle bounds using subtraction to avoid unsigned overflow, opens video with stream type zero, configures video and applies geometry. Every initialization failure unwinds the completed stages. Close releases video and tolerates a second close. As corrected in section 10.3, NvSS owns KD initialization/termination internally; the core does not acquire a separate graphics session.
 
 Decode accepts a caller-framed complete access unit with a timestamp; it rejects empty, null and oversized inputs. Access-unit framing and H.264 parameter-set handling belong to the future transport layer. The API call's return code is passed to the caller; reconnect, decoder restart and stock-display restoration need the future owner/controller.
 
@@ -416,3 +416,153 @@ The expanded audit passes **31 NvSS checks, 8 KD checks, 6 NvMedia checks and th
 ### 10.6 Remaining integration work
 
 The renderer now has a tested binding component and corrected KD lifecycle. Geometry has a specific 448×448 HMI provider and a 348×368 navigation visible-area candidate. Remaining work is to finish the selected map layout/model path, resolve the NVIDIA cluster output, verify display-state/visibility semantics and implement the Porsche HMI ownership bridge. Receiver capture/negotiation and eventual visible-output validation follow those integration pieces.
+## 11. Visibility control and display-driver boundary (2026-10-25)
+
+Work resumed in this chat after its timer completed at **01:55:00.006 EDT**.
+No vendor executable was run and no vehicle was accessed.
+
+### 11.1 Public setter polarity established through command dispatch
+
+Completed the previously missing link from `NvSSVideoSetAttribs` to the render
+thread. These addresses refer to the hash-pinned NvSS reference in the profile:
+
+1. Public byte 60 enables the visibility command. Byte 61 is inverted at
+   `0x17a0`–`0x17b0` into internal control byte 65.
+2. Control helper `0x9638` copies that byte into a message payload at `0x98d4`
+   and selects **command 8** at `0x98f0`.
+3. Setup stores the ninth callback (index 8) at `0x8650`. Its GOT-relative
+   literal at `0x8878` resolves to **`0x7280`**, the display-control handler.
+   The registration routine copies the callback array at `0xcaf4`.
+4. The worker indexes the array by command at `0xcf10`, passes the payload
+   after its 12-byte header, and invokes the callback at `0xcf24`.
+5. Handler `0x7280` stores the internal enable byte at renderer offset `0xb1`.
+   For an initialized renderer it calls helper `0x7000`.
+6. Helper `0x7000` takes the zero branch through
+   `NvMediaVideoMixerUnbindOutput` (`0x7044`) and
+   `NvMediaVideoOutputDestroy` (`0x704c`). Nonzero takes the create/bind path,
+   calling `NvMediaVideoOutputCreate` (`0x7148`) and
+   `NvMediaVideoMixerBindOutput` (`0x7164`) when no output exists.
+
+| Operation | Public byte 60 | Public setter byte 61 |
+|---|---:|---:|
+| Request enabled/bound output | 1 | **0** |
+| Request disabled/unbound output | 1 | **1** |
+| Leave output state alone | 0 | ignored |
+
+**Getter/setter asymmetry:** `NvSSVideoGetAttribs` copies internal enabled state
+to byte 61 at `0x1684`–`0x1688`. Therefore copying that queried byte back with the
+visibility-update flag set would invert the state. Do not treat this as an
+ordinary read/modify/write boolean.
+
+Added `pcm4_display_set_visible(display, visible)` accepting exactly 0 or 1.
+It builds a fresh zeroed 64-byte block, sets only byte 60 and the inverted byte
+61, and returns the vendor result. It does not query attributes, alter geometry,
+close the renderer on failure, or select an HMI context. Opening still requests
+geometry only; there is no automatic takeover or new visibility default.
+
+Host tests verify both full command blocks, invalid arguments, closed state and
+vendor failure propagation without losing the handle. Both native test suites
+pass with AddressSanitizer/UndefinedBehaviorSanitizer. This confirms our packing
+and state handling; **visible output on the car remains untested**. Binding an
+output alone does not establish HMI ownership or page/alert priority.
+
+### 11.2 Output enumeration now reaches the driver interface
+
+Resolved the TVMR library's actual PLT/GOT relocations with reviewed first thunk
+`0x2e3c`; the resolver now accepts an explicit PLT start while retaining thunk/GOT
+cross-checks. Relevant calls from `TVMROutputQuery` are:
+
+| Call instruction | Resolved import |
+|---|---|
+| `0x397d4` | `nvdcOpen` |
+| `0x397e8` | `nvdcQueryDisplays` |
+| `0x39884` | `nvdcQueryDisplayInfo` |
+| `0x39964` | `nvdcQueryHeadStatus` |
+| `0x399a4` | `nvdcGetMode` |
+
+The TVMR type-conversion table at `0x57880` yields the following chain through
+the already-reviewed NvMedia translation:
+
+| Driver class | TVMR type | NvMedia device ID |
+|---:|---:|---:|
+| 0 | `0xb303` | fallback path 0 |
+| 1 | `0xb302` | 0 |
+| 2 | `0xb304` | 2 |
+| 3 | `0xb306` | 1 |
+| 4 | `0xb301` | 0 |
+
+NvSS accepts only device IDs 0 and 1. The table identifies driver class 3 as the
+path to NvSS device 1, **but does not yet identify class 3 as the Macan cluster**.
+Connector names must not be assigned to these classes without further evidence.
+
+Extracted Stage-1 `libnvdc.so`, 8,560-byte executable LOAD extent, source SHA-256:
+
+```text
+3385097792315eee4dcdc706210704353bd598bf2fa3b515719cc2f0a32bcfe7
+```
+
+`nvdcQueryDisplayInfo` at `0x11a0` obtains its record through a `devctl` call at
+`0x11fc`, command **`0xc0141502`**, with a 20-byte request/reply buffer. It maps
+reply fields to a 16-byte result: class at offset 0, head at offset 4, a
+byte-derived flag at offset 8 and a final word at offset 12. TVMR uses the
+offset-8 flag to filter records; its precise driver meaning remains unlabelled.
+TVMR then queries head status and mode separately. Thus the output identity
+depends on driver responses, not simply the boot mode's first word.
+
+Also extracted `libnvdisp.so`, `libnvodm_disp.so` and `devg-nvrm` as driver-side
+leads. The latter names `/dev/nvdisp-ctrl`; neither this string nor the ODM
+library's `InitDsi2LvdsBridge` symbol resolves the class-to-connector association.
+These are next tracing targets, not mapping proof.
+
+### 11.3 Reproduction and remaining work
+
+```sh
+python3 tools/inspect_mmx_boot.py \
+  private/firmware/mu1476-aio/MMX2/mifs-stage1/50/default/mifs-stage1.img \
+  --output private/analysis/mu1476-nvdc --select '(^lib/libnvdc.so$)'
+sh tools/test_pcm4_native.sh
+python3 tools/audit_mu1476_display.py
+```
+
+Choose a fresh extraction directory if the destination exists. The updated audit
+passes **49 NvSS instruction/literal checks, 8 KD checks, 6 NvMedia checks,
+7 TVMR checks and 6 NVDC checks**, plus 10 NvSS import calls, six TVMR import
+thunks, the output-type table and callback-address resolution. Profile hashes
+now include TVMR and NVDC. `deployment_ready` remains false.
+
+Next: trace driver class assignment or obtain a later runtime enumeration;
+establish the active map model/layout; implement the Porsche HMI ownership bridge
+with current-stock-request caching and restoration. The new visibility API is
+one component of that handover, not a replacement for the bridge.
+
+## Local unattended continuation (superseded)
+
+`sh tools/codex_pcm4.sh ...` starts a CLI session with
+`model_auto_compact_token_limit=330000`. It does not change the already-running
+chat or the global configuration. Model context limits can constrain the effective
+threshold.
+
+`python3 tools/schedule_pcm4_offline.py --dry-run` previews the next 03:00 in
+America/New_York. Without `--dry-run`, it starts a detached, one-shot timer that
+invokes `codex exec` with that same threshold, workspace-write sandbox and no
+interactive approvals. The prompt continues offline output/visibility analysis
+and HMI ownership work, preserving existing changes. It does not flash, contact a
+car, commit or push. It starts a new run using these documents as its handoff.
+
+The detached timer was launched for **2026-10-25 03:00 EDT**, PID **80405**, then
+cancelled by owner request in favor of a current-session wait. Its state file was
+marked cancelled; the sandbox prevented signalling the detached PID, so process
+termination could not be confirmed. The current-session 03:00 timer was later
+successfully cancelled with Ctrl-C and replaced with a 01:55 timer, which
+completed at 01:55:00.006 EDT on October 25. No detached continuation is desired.
+Historical state, timer
+output, execution events and the final response are under
+`private/scheduled-runs/20261025T030000-0400/`. Process inspection from the current
+sandbox returned permission denied, so continued liveness and eventual execution
+have not been verified. This is not a system-installed scheduler: reboot or
+process cleanup can remove the timer; sleep postpones execution until wake.
+Authentication, network access and CLI startup permissions must still succeed at
+run time. The state file records completion or failure if the timer reaches the
+execution stage. From an ordinary local terminal, `kill 80405` cancels the timer
+while that PID still identifies this process. Do not schedule the same start time
+twice; the scheduler refuses an existing run directory.
