@@ -1,5 +1,10 @@
 # Porsche PCM4 CarPlay Cluster Projection
 
+> **Experimental prerelease — use at your own risk. This software has not been
+> tested on a real car.** It may disrupt PCM or cluster operation and require
+> recovery. It is provided without warranty; offline test results do not establish
+> vehicle safety, compatibility or reliability.
+
 A development project to bring a separate, iPhone-generated CarPlay navigation
 view to the instrument cluster of a Porsche Macan with PCM4/MHI2, while keeping
 the main PCM CarPlay display usable.
@@ -66,6 +71,9 @@ context74=[22,33], this projection context does not combine the stock intersecti
 and map displayables. Other-page requests pass through.
 
 ## Start here
+
+See [PRERELEASE.md](PRERELEASE.md) for the test ZIP inventory, release scope and
+the distinction between public test assets and the private integration package.
 
 Read the [on-car onboarding and test guide](controlled-test/ONBOARDING_TEST_GUIDE.md)
 for prerequisites, exact staged commands, pass/fail gates, evidence to return,
@@ -151,3 +159,11 @@ Firmware, extracted libraries, converted OEM classes, proprietary-derived
 integration archives and vehicle evidence belong in ignored private storage,
 not Git. Referenced projects retain their own licenses and attribution terms.
 This project is independent of Porsche, Audi, Volkswagen, Apple and Harman.
+
+## License
+
+Project code is licensed under the **GNU General Public License, version3 only
+(SPDX: GPL-3.0-only)**; see [LICENSE](LICENSE). Copyright2026 the project
+contributors. See [NOTICE.md](NOTICE.md) for upstream references and attribution.
+Existing third-party notices and licenses remain applicable. This license does
+not grant rights to Porsche/Harman/Apple/QNX firmware, libraries or OEM classes.

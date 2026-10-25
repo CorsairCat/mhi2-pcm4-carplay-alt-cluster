@@ -1,5 +1,11 @@
 # PCM4 MU1476 controlled test kit
 
+> **Use at your own risk. This kit has not been tested on a real car.**
+> It is experimental and provided without warranty. Synthetic host tests do not
+> prove QNX execution or correct physical output on the vehicle.
+
+Project code is GPL-3.0-only; see the included LICENSE and NOTICE.md.
+
 Start with [ONBOARDING_TEST_GUIDE.md](ONBOARDING_TEST_GUIDE.md) for the complete
 first-visit workflow, pass/fail gates, integration tests and recovery.
 [TESTING.md](TESTING.md) details the standalone kit stages.

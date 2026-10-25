@@ -58,6 +58,8 @@ fi
     (out/'manifest').write_text(''.join('|'.join((name,destination,mode,digest(out/name),old))+'\n' for name,destination,mode,old in rows))
     shutil.copy2(ROOT/'integration/install.sh',out/'install.sh')
     shutil.copy2(ROOT/'integration/README.md',out/'README.md')
+    for name in ('LICENSE', 'NOTICE.md'):
+        shutil.copy2(ROOT/name,out/name)
     shutil.copy2(ROOT/'controlled-test/ONBOARDING_TEST_GUIDE.md',out/'ONBOARDING_TEST_GUIDE.md')
     shutil.copy2(ROOT/'profiles/pcm4-mu1476-display.json',out/'profile.json')
     (out/'SHA256SUMS').write_text(''.join(digest(p)+'  '+p.name+'\n' for p in sorted(out.iterdir()) if p.is_file()))

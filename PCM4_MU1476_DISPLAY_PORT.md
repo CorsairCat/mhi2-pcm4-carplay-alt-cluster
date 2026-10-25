@@ -1004,7 +1004,7 @@ restart, kill services or contact the car. `integration/control.sh` exposes
 explicit probe, renderer, enable and disable operations. The renderer is started
 manually for testing rather than installed as an unattended service.
 
-`private/releases/pcm4-mu1476-integration-r3.zip` is the current private stage3/4
+`private/releases/pcm4-mu1476-integration-r4.zip` is the current private stage3/4
 candidate; the original Stage0–2 ZIP is refreshed separately. The private r1/r2 builds are superseded. No proprietary payload is added to Git.
 
 ### Verification and limits
@@ -1083,6 +1083,17 @@ hashes above describe that earlier build; the refreshed archives are:
 
 Both archives passed CRC, every SHA256SUMS entry and exact guide-content checks.
 The installer/rollback regression passed against r3. No car was contacted.
+
+### GPLv3 and prerelease preparation
+
+Project code is now declared GPL-3.0-only, with the full LICENSE and upstream
+NOTICE.md. Both test ZIPs carry the license, attribution and explicit use-at-own-
+risk / untested-on-a-real-car warning. Integration r4 supersedes r3 with no
+installed-payload changes; the controlled kit now contains24 files plus its
+checksum manifest. PRERELEASE.md lists public test/source assets separately from
+the OEM-derived private integration ZIP. Packaging checks verify license bytes,
+warnings, all manifest hashes, CRC and r3/r4 installed-payload equality. The
+installer/rollback regression passes against r4. No on-car testing was performed.
 
 ## Local unattended continuation (superseded)
 

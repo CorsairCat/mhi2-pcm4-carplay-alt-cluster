@@ -1,5 +1,9 @@
 # PCM4 MU1476 on-car onboarding and test guide
 
+> **Use at your own risk. This software has not been tested on a real car.**
+> No vehicle stage below has been validated. The candidate is experimental and
+> provided without warranty; retain an independent PCM recovery method.
+
 Vehicle: 2017 Porsche Macan, PCM4. This candidate targets the inspected MU1476
 reference, not the original MU0809 installation. Firmware updates are a separate
 operation. The integration is offline tested; no stage below has passed on this

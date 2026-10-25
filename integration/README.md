@@ -1,10 +1,16 @@
 # PCM4 MU1476 integration candidate — stages 3/4
 
+> **Use at your own risk. This candidate has not been tested on a real car.**
+> It is experimental, provided without warranty, and may require PCM recovery.
+
 This is a compiled, offline-tested vehicle-test candidate, **not a vehicle-validated
 release**. The private generated archive contains a patched proprietary loader
 and one patched OEM Java class. Keep the archive private and out of Git.
 No firmware-update bundle is required. These are application-level files.
 No gauges or cluster ECU firmware are modified.
+
+Project code is GPL-3.0-only; see the included LICENSE and NOTICE.md. OEM files
+and derived OEM classes retain their separate rights and are not relicensed.
 
 The private archive includes `ONBOARDING_TEST_GUIDE.md` with the complete staged
 vehicle procedure, pass/fail gates and results checklist. Its repository source

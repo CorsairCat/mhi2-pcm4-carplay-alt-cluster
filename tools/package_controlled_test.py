@@ -19,6 +19,8 @@ def main():
     if missing:
         raise SystemExit('Missing kit components: ' + ', '.join(missing))
     content = {name: (KIT / name).read_bytes() for name in FILES}
+    for name in ('LICENSE', 'NOTICE.md'):
+        content[name] = (ROOT / name).read_bytes()
     manifest = ''.join(hashlib.sha256(data).hexdigest() + '  ' + name + '\n'
                        for name, data in content.items())
     output = ROOT / 'private/releases/pcm4-mu1476-controlled-test.zip'
@@ -26,6 +28,8 @@ def main():
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for name in FILES:
             archive.write(KIT / name, 'pcm4-mu1476-controlled-test/' + name)
+        for name in ('LICENSE', 'NOTICE.md'):
+            archive.write(ROOT / name, 'pcm4-mu1476-controlled-test/' + name)
         archive.writestr('pcm4-mu1476-controlled-test/SHA256SUMS', manifest)
     with zipfile.ZipFile(output) as archive:
         if archive.testzip() is not None:
@@ -34,7 +38,7 @@ def main():
             if archive.read('pcm4-mu1476-controlled-test/' + name) != data:
                 raise SystemExit('Archive content mismatch: ' + name)
     print(output)
-    print(f'{len(FILES)} components + SHA256SUMS, {output.stat().st_size} bytes; verified')
+    print(f'{len(content)} components + SHA256SUMS, {output.stat().st_size} bytes; verified')
 
 if __name__ == '__main__':
     main()
