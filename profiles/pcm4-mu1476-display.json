@@ -22,12 +22,16 @@
     "configuration": "2_lvds",
     "terminal_name": "2nd_lvds",
     "driver_terminal": "Tegra:TFTLCD0",
-    "display_manager_id": 4
+    "display_manager_id": 4,
+    "nvss_output_device": 0,
+    "evidence": "Offline boot-mode/driver enumeration trace; conditional on Porsche 448x448 profile being active",
+    "runtime_verified": false
   },
   "renderer": {
     "nvss_output_device": null,
-    "layer": null,
+    "layer": 60,
     "priority": null,
+    "layer_selection": "Owner-selected Audi-style displayable 60 (factory HUD_MAP_VIEW); runtime untested",
     "stream_type": 0,
     "visibility_setter": {"update_flag_offset": 60, "value_offset": 61, "show_value": 0, "hide_value": 1, "runtime_verified": false},
     "open_word_at_20": 0,
@@ -40,7 +44,10 @@
   "ownership": {
     "evidence": "Static MU1476 HMI bytecode; runtime untested",
     "java_terminal": 1,
-    "context": null,
+    "context": 900,
+    "projection_displayables": [60],
+    "selection": "Owner-selected separate context 900 containing displayable 60; must be declared before switching",
+    "runtime_verified": false,
     "stock_navigation_contexts": [72, 73, 74, 75, 76, 77],
     "hmi_class": "de/audi/tghu/fwhmi/porsche/DisplayManagerMIB2PorscheHigh",
     "switch_method_descriptor": "(IILde/audi/atip/hmi/view/IDisplayListener;)V",
@@ -54,8 +61,8 @@
   "carplay": {"safe_area": null, "physical_width_mm": null, "physical_height_mm": null},
   "blockers": [
     "Read active display topology and map viewport; do not equate display-manager ID with NvSS output device.",
-    "Trace Porsche HMI ownership and select an unused layer/context.",
+    "Implement declaration of selected context 900 containing displayable 60 and readiness coordination.",
     "Verify visibility and kd stream-property behavior before connecting the renderer to live output.",
-    "Build and verify with the QNX ARM toolchain; only host mock tests exist so far."
+    "QNX ARM cross-build and host tests passed; QNX execution and J9 loading remain untested."
   ]
 }

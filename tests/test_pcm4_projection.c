@@ -1,4 +1,5 @@
 #include "pcm4_projection.h"
+#include "pcm4_screen_receiver.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -122,9 +123,83 @@ static void integration_tests(void)
     assert(!shown && !p.handover.connected && !p.stream.emit);
     assert(!pcm4_display_close(&d));
 }
+static unsigned char screen_body[512000];
+static int decrypt_calls, decrypt_fails;
+static int decrypt_mock(void *opaque, void *data, size_t size)
+{
+    size_t i;
+    unsigned char *p = data;
+    (void)opaque; decrypt_calls++;
+    if (decrypt_fails) return -1;
+    for (i=0;i<size;i++) p[i] ^= 0xaa;
+    return 0;
+}
+static size_t screen_message(unsigned char *out, unsigned opcode, const unsigned char *body, size_t size)
+{
+    size_t i;
+    memset(out,0,128); out[0]=(unsigned char)size; out[1]=(unsigned char)(size>>8);
+    out[2]=(unsigned char)(size>>16); out[3]=(unsigned char)(size>>24); out[4]=(unsigned char)opcode;
+    for (i=0;i<size;i++) out[128+i] = body[i] ^ (opcode == 0 ? 0xaa : 0);
+    return 128+size;
+}
+static void screen_tests(void)
+{
+    struct pcm4_nv_api api = {open_mock,configure_mock,get_mock,set_mock,decode_mock,close_mock};
+    struct pcm4_display d = {0};
+    struct pcm4_display_config c = {1,448,448,100,60,{448,448,30},{0,0,448,448}};
+    struct pcm4_projection p = {0};
+    struct pcm4_screen_receiver r;
+    struct hmi m = {0};
+    unsigned char wire[1024];
+    size_t length=0,i;
+    uint64_t generation=1;
+    decodes=shown=decrypt_calls=decrypt_fails=0;
+    assert(!pcm4_display_open(&d,&api,&c));
+    assert(!pcm4_projection_init(&p,&d,take,restore,&m,100));
+    assert(!pcm4_handover_stock(&p.handover,1,72,0));
+    assert(!pcm4_projection_begin(&p,generation,1));
+    assert(!pcm4_screen_receiver_init(&r,&p,generation,screen_body,sizeof(screen_body),
+                                    scratch,sizeof(scratch),decrypt_mock,NULL));
+    /* Continuous crypto must advance even for a VIDEO_FRAME before avcC. */
+    length += screen_message(wire+length,0,delta,sizeof(delta));
+    length += screen_message(wire+length,2,NULL,0);
+    length += screen_message(wire+length,1,config,sizeof(config));
+    length += screen_message(wire+length,0,idr,sizeof(idr));
+    for (i=0;i<length;i++) assert(!pcm4_screen_receiver_feed(&r,generation,wire+i,1,2));
+    assert(r.messages==4 && r.accepted_frames==1 && decrypt_calls==2 && decodes==1 && shown);
+    assert(pcm4_screen_receiver_feed(&r,99,wire,1,3)==-1 && shown);
+    assert(!pcm4_screen_receiver_end(&r,generation,4) && !shown);
+    /* Every incomplete header extent is rejected at EOF, without dispatch. */
+    for (i=1;i<128;i++) {
+        generation++;
+        assert(!pcm4_projection_begin(&p,generation,5));
+        assert(!pcm4_screen_receiver_init(&r,&p,generation,screen_body,sizeof(screen_body),
+                                        scratch,sizeof(scratch),decrypt_mock,NULL));
+        assert(!pcm4_screen_receiver_feed(&r,generation,wire,i,5));
+        assert(pcm4_screen_receiver_end(&r,generation,5)==-1 && !p.handover.connected);
+    }
+    generation++;
+    assert(!pcm4_projection_begin(&p,generation,6));
+    assert(!pcm4_screen_receiver_init(&r,&p,generation,screen_body,sizeof(screen_body),
+                                    scratch,sizeof(scratch),decrypt_mock,NULL));
+    length=screen_message(wire,1,config,sizeof(config));
+    length+=screen_message(wire+length,0,idr,sizeof(idr));
+    assert(!pcm4_screen_receiver_feed(&r,generation,wire,length,7) && shown); /* coalesced messages */
+    decrypt_fails=1;
+    length=screen_message(wire,0,idr,sizeof(idr));
+    assert(pcm4_screen_receiver_feed(&r,generation,wire,length,8)==-1 && !shown && r.failed);
+    decrypt_fails=0;
+    generation++;
+    assert(!pcm4_projection_begin(&p,generation,9));
+    assert(!pcm4_screen_receiver_init(&r,&p,generation,screen_body,sizeof(screen_body),
+                                    scratch,sizeof(scratch),decrypt_mock,NULL));
+    memset(wire,0,128); memset(wire,255,4);
+    assert(pcm4_screen_receiver_feed(&r,generation,wire,128,10)==-1 && r.failed);
+    assert(!pcm4_display_close(&d));
+}
 int main(void)
 {
-    stream_tests(); handover_tests(); integration_tests();
-    puts("PASS: AVCC bounds/IDR/session isolation; handover recovery; integrated mock decode/show/restore");
+    stream_tests(); handover_tests(); integration_tests(); screen_tests();
+    puts("PASS: AVCC/IDR/session isolation; handover recovery; fragmented/coalesced Screen crypto/decode/show/restore");
     return 0;
 }

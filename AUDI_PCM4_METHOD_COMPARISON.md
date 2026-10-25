@@ -203,3 +203,150 @@ python3 tools/inspect_mmx_boot.py \
 ```
 
 The reader passed on all three real input images with zero ImageFS checksum sums. Structural checks do not authenticate the AIO package independently.
+
+## 8. MU1476 native display ownership investigation (2026-10-25)
+
+This investigation uses the supplied offline AIO reference. It does not select a
+live output or establish that a candidate ID is free on the owner's car. The
+most useful new result is that the NvSS `layer` argument reaches a **logical
+DisplayManager displayable ID**, while NVIDIA hardware planes are managed
+separately. Factory firmware already gives logical displayable **60** a name:
+`DISPLAYABLE_HUD_MAP_VIEW`. Its absence from the Porsche context lists is
+therefore insufficient evidence that it is available globally.
+
+### 8.1 Source identities and method
+
+| Original input | SHA-256 |
+| --- | --- |
+| `libdmdt_core.so` from `mu1476-aio-routing/files/eso/lib/` | `6f4ec550f4dc9aeee4a69099ec3c2b40984218953796ee61a6204d573d498e13` |
+| `displaymanager` from `mu1476-aio-mifs50/files/eso/bin/apps/` | `c1c212e18282a65c6181835c139eb129ab18a629c6809568cf3a7072e997d22e` |
+| `libnvdisp.so` from `mu1476-display-driver/files/lib/` | `767ffced9ed2e9c3a320809ef419f545a5d0a80fe15923291c306927591f0ca1` |
+| `libnvdc.so` from `mu1476-nvdc/files/lib/` | `3385097792315eee4dcdc706210704353bd598bf2fa3b515719cc2f0a32bcfe7` |
+| `libnvodm_disp.so` from `mu1476-display-driver/files/lib/` | `cc1530ae3d677980f4c10f5c7051a7b510f948baa3c7d121c87a77f003f3b533` |
+
+Paths in this table are relative to ignored `private/analysis/`. Synthetic ELF
+section metadata was generated with `tools/make_elf_analysis_copy.py`; executable
+instructions were not modified. Apple's Command Line Tools `llvm-objdump` with
+`--triple=armv7-none-eabi` decoded the copies. This triple matters: older ARM
+selection can leave MOVW/MOVT instructions undecoded. Addresses below are ELF
+virtual addresses in these hash-pinned files, never deployment offsets.
+
+Derived disassemblies, ELF-copy manifests and JSON evidence remain under
+`private/analysis/mu1476-profile-trace/`. No proprietary binaries are added to Git.
+
+### 8.2 Factory displayable names and the meaning of “layer 60”
+
+Exported `displayableGetDSIName(int)` in `libdmdt_core.so` starts at `0x6584`.
+It adds one to the requested ID, bounds the result to 61, then dispatches through
+an ARM branch table starting at `0x659c`. Resolving each branch and its
+PC-relative string load gives:
+
+| Logical displayable ID | Factory name | Branch entry → case |
+| --- | --- | --- |
+| 19 | `DISPLAYABLE_MAPVIEWER` | `0x65ec` → `0x6874` |
+| 22 | `DISPLAYABLE_MAP_3D_INTERSECTION_VIEW` | `0x65f8` → `0x6850` |
+| 23 | `DISPLAYABLE_MAP_JUNCTION_VIEW` | `0x65fc` → `0x6844` |
+| 33 | `DISPLAYABLE_KOMBI_MAP_VIEW` | `0x6624` → `0x67cc` |
+| 58 | `DISPLAYABLE_GOOGLE_EARTH_KOMBI_MAP_VIEW` | `0x6688` → `0x66ac` |
+| 59 | `DISPLAYABLE_EXTERNAL_SMARTPHONE` | `0x668c` → `0x66a0` |
+| 60 | `DISPLAYABLE_HUD_MAP_VIEW` | `0x6690` → `0x6694` |
+
+The full decoded table is in `dmdt-displayable-names.json`. These are enum/debug
+names, not evidence that every named producer runs on Macan. They do establish
+factory use of the number 60 in this namespace.
+
+The native `displaymanager` stream path supplies the missing connection to
+NvSS's KD property:
+
+- `0x1459e0` loads property ID `0x1789`; `0x1459ec` calls
+  `kdGetClientStreamPropertyivNV` through verified PLT entry `0x106428`.
+- `0x1459fc` loads the returned integer; `0x145a08` stores it at stream-object
+  offset `+8`. The shared continuation at `0x1458e0` retrieves that ID and at
+  `0x1458f0` passes it to an internal registration/routing function.
+- Separately, `0x145930` loads stream boolean property `0x178f` and `0x145938`
+  calls `kdGetClientStreamPropertybvNV`; the result is stored at object `+0x164`.
+  This is the same property that the reviewed NvSS layer-validity path sets.
+- Hardware-plane information is queried separately: `0x1125f8` selects desktop
+  property 254 and `0x112600` calls `kdGetDesktopPropertyivNV`. The surrounding
+  code reports the available hardware layer count. `0x112634` calls
+  `kdSetDesktopLayerPropertyivNV` with physical layer index **0** and property
+  `0x161`, using value 3. The surrounding error string identifies blend-mode
+  setup for layer 0.
+
+PLT entries were resolved by checking the actual ARM thunk/GOT relocation
+mapping with `tools/audit_mu1476_display.py`'s `plt_imports`, using first thunk
+`0x105ffc`; the resulting map is saved as `displaymanager-plt.json`.
+
+Consequently, “CarPlay on layer 60” does not mean hardware plane 60 or guarantee
+that it is drawn above the map. Factory contexts can still route native map
+streams/displayables onto the cluster's hardware planes. Our intended method
+is to register a distinct CarPlay stream/displayable and switch the cluster to
+a context containing it while retaining the latest stock context for
+restoration. It does not overwrite the stock map producer's framebuffer or
+redirect its writes. A context switch changes which producers the compositor
+routes; this is why ownership matters in addition to successful H.264 decoding.
+Exact plane ordering and the live map's assigned plane are still unproved.
+
+### 8.3 Stock context ownership and candidate context 900
+
+The prior Porsche context reconstruction is now supported by native names:
+72 contains Kombi map 33; 73 contains intersection view 22; 74 contains both;
+75 contains neither; 76 contains Google Earth Kombi 58; 77 contains 22 and 58.
+The factory smartphone context is 78 with displayables `[16,59]`. That does not
+supply an auxiliary CarPlay cluster context automatically.
+
+A bounded ROM scan inspected 150 classes whose names match `DisplayManager`,
+`Displayable` or `/context/`, covering 1,911 methods with zero inspection/decode
+errors. Four implementations had recognized literal `DisplayContext`
+declarations: MIB2High (76), PorscheHigh (76), Standard (7), Bentley (3). None of
+those declarations allocates context 900 or includes displayable 60. Porsche's
+literal integer 60 within `defineContexts` is **context ID 60**, whose displayable
+list is `[36,19,38]`; it must not be confused with displayable 60.
+
+Two other inspected methods contain the literal 900:
+`CtxLoadState.enter` (method ROM `0x221163c`, PC 33) and
+`SetupHandler.saveState` (method ROM `0x2230770`, PC 69). The first selects
+950/900 based on `isMapKombi()` before constructing a map `State` using storage
+access and reading persistent data. These are map-state storage identifiers,
+not a `DisplayContext(900,...)` declaration. The findings are recorded in
+`hmi-candidate-usage.json` against ROM SHA-256
+`54de7f366f29be2bc2624d3b9d35f781c29f1dfa4ca707d1bf506c1aa4177ea7`.
+This scoped negative result does not exclude native/dynamic registrations or
+other components. Context 900 remains a candidate requiring a live collision
+check; it has not been proved free or selected as a Porsche default.
+
+### 8.4 Driver output query: structure and corrected command decoding
+
+In the extracted `libnvdisp.so`, a native devctl handler beginning at `0x18ee0`
+contains a display-information branch at `0x19028`. It reads the requested
+display index from input data `+4`, bounds it against the registered-display
+count at state `+0x1f4`, then loads a display handle from the eight-byte table at
+state `+0x1d0`. At `0x1904c–0x1905c`, underlying display type 1 is returned as
+public class 1; type 2 branches to `0x191f4`, which returns public class 3.
+Unsupported types return error 22.
+
+At `0x191f8–0x19228`, reply data fields are populated as follows: class at `+0`;
+attached-controller flag at `+8`; controller/head identifier at `+12`; a byte
+from display object `+0x90` widened to a word at reply `+16`. If display object
+`+0x80` has no attached controller, the flag is zero and head is -1; otherwise
+the flag is one and the head comes from controller object `+0x320`. This proves
+the meaning of the attachment flag **for this handler**.
+
+**Correction from subsequent ARMv7 tracing:** the earlier claim that the NvDC
+client uses `0xc0141502` was an instruction-decoding error. At `0x11dc`, word
+`e3001502` is `movw r1,#0x502`: the apparent extra 1 identifies destination
+register r1, not part of the immediate. At `0x11e4`, `e34c1014` supplies high
+half `0xc014`. Thus the actual client command is **`0xc0140502`**, matching
+the driver. The EFS driver variant has the same reviewed handler instructions.
+This removes the proposed interface mismatch; it does not by itself complete
+the connection from an enumerated output to the cluster connector. Further
+tracing is recorded in `NVSS_OUTPUT_CONTEXT_TRACE_MU1476.md` when available.
+
+The carved DisplayManager configuration continues to associate main with
+`Tegra:HDMI0`/display 0 and second LVDS with `Tegra:TFTLCD0`/display 4. The
+existing TVMR trace maps public class 3 to output type `0xb306` and NvMedia
+output device 1. We have **not** closed the link from TFTLCD0 to that class, nor
+proved that the carved configuration is the live Macan configuration. Thus
+NvSS output device 1 remains a plausible candidate rather than a verified
+cluster destination. No output ID, displayable ID or context ID should be
+filled into a production-ready profile solely from this investigation.

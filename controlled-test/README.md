@@ -1,8 +1,11 @@
 # PCM4 MU1476 controlled test kit
 
+Start with [TESTING.md](TESTING.md) for the ordered stages and exact commands.
+
 **Ready now: read-only vehicle evidence collection. Rendering is not deployment
-ready:** there is no QNX target binary yet, and the cluster output device, free
-layer, priority and HMI ownership are unresolved. This is not an SD firmware
+ready:** a cross-compiled QNX target binary is now present locally under `bin/`,
+but has not executed under QNX or on the vehicle. The cluster output device,
+free layer, priority and HMI ownership are unresolved. This is not an SD firmware
 update or an automatic installer. Existing shell access is required. No vendor
 firmware, Audi binary or startup modification is included.
 
@@ -27,10 +30,17 @@ not proof that every item succeeded. System queries may need existing privileges
 
 Included `src/` is a snapshot of the original renderer core and dynamic binder,
 plus a bounded test driver. No iPhone connection or HMI takeover is attempted.
-Build on a host with a licensed QNX SDK compatible with the unit's ARM32
-little-endian runtime: source its environment, select its actual qcc variant,
-then run `sh build.sh`. The default variant is a candidate, not verified here.
-Ordinary Homebrew GCC/Clang is not a replacement for the QNX sysroot and runtime.
+The current build uses the isolated QNX 6.5/GCC 8.5 container on `ssh home`, under
+`~/dev/pcm4-qnx-toolchain`. From the project root on the Mac,
+`bash tools/build_pcm4_home.sh` rebuilds and retrieves the driver and reports.
+The target is ARM32 little-endian EABI5, base PCS softfp, dynamically linked to
+`libc.so.3`. Static checks against the supplied MU1476 libc pass; runtime and
+symbol-version compatibility have not been proved. The binary is ignored by
+git: another checkout must rebuild or receive this locally built folder.
+
+Alternatively, with a compatible official SDK, source its environment, select
+its actual qcc variant, then run `sh build.sh`. The default qcc variant remains
+untested. Ordinary Homebrew GCC/Clang does not replace the QNX sysroot/runtime.
 
 The driver takes explicitly reviewed output, layer, priority and dimensions.
 It does not choose an HMI context, make a library identity decision, or guarantee

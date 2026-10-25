@@ -56,9 +56,9 @@ Keep these identifier spaces separate:
 | --- | --- | --- |
 | Boot mode's leading word | Porsche/PAG mode pair has 1 for 800×480 and 0 for 448×448. | Vendor mode-field meaning not fully decoded. Do not convert directly into another API's ID. |
 | Display-manager display ID | Conditional `2_lvds` configuration assigns ID 4 to `2nd_lvds` / `Tegra:TFTLCD0`. | Candidate cluster route; active configuration unverified. |
-| NVIDIA output device | `NvSSVideoOpen` accepts values 0 or 1, then queries output devices and matches their returned IDs. | Unknown which maps to the cluster. **Do not pass 4.** |
-| Java HMI terminal | Audi bridge uses terminal 1 for its cluster. | Porsche mapping unverified; profile null. |
-| Layer / context | Audi uses layer 60, context 900. | No Porsche selection made; profile null. |
+| NVIDIA output device | `NvSSVideoOpen` accepts values 0 or 1 and matches type-derived returned IDs. Later native tracing links device0 to448x448, device1 to800x480 for the Porsche boot profile. | Conditional offline mapping; confirm active profile. **Do not pass4.** |
+| Java HMI terminal | Porsche bytecode maps terminal1 to internal display4. | Selected terminal1; internal display IDs differ from NvSS output IDs. |
+| Layer / context | Owner selected Audi-style displayable60 in added context900. | Selected in profile; declaration/integration and runtime validation pending. |
 
 Native output check: `0x2a64` reads the output argument, `0x2a68` compares with 1 and `0x2a6c` accepts unsigned values ≤1. The query helper at `0x646c` enumerates `NvMediaVideoOutputDevicesQuery` results, compares the requested ID with each record and copies the matched mode's dimensions into its result. This supports querying runtime topology before selecting an output, rather than assuming enumeration order or conflating IDs.
 
@@ -566,6 +566,354 @@ and profile, generates 20 complete Annex-B access units, exercises full playback
 and cleanup with a synthetic dynamic library under sanitizers, and rejects
 trailing data and unsupported output IDs. Existing renderer tests and the
 hash-pinned static audit also pass. No vendor library was executed.
+
+## 13. Toolchain investigation — 2026-10-25
+
+Native renderer executables/shared libraries need a QNX-target compiler **and**
+compatible headers, CRT/startup objects, linker and runtime libraries. Host mock
+tests, evidence collection and Python firmware analysis do not require them.
+
+Measured directly from the supplied MU1476 ELF program headers/dynamic tables:
+
+| File | Class/machine/flags | Interpreter | Relevant dependencies |
+|---|---|---|---|
+| `dio_manager` | ARM32 little-endian, `0x05000002` | `/usr/lib/ldqnx.so.2` | `libc.so.3`, `libsocket.so.3`, `libm.so.2` |
+| `libnvss_video.so` | ARM32 little-endian, `0x05000002` | none | `libc.so.3`, `libm.so.2`, NVIDIA libraries |
+| `libKD.so` | ARM32 little-endian, `0x05000002` | none | `libc.so.3`, `libsocket.so.3`, NVIDIA libraries |
+
+These are consistent with the candidate QNX 6.5 ARM EABI toolchain. ELF flags and
+library names alone do not prove the entire OS version or floating-point PCS.
+Validate a target build's loader, imported symbols and ABI before running it.
+
+The [Audi installation/build instructions](https://github.com/aberbic/Audi-MHI2-Virtual-Cockpit-Altscreen-CarPlay-AndroidAuto/blob/main/INSTALL)
+specify a locally built QNX 6.5 ARMv7 container, GCC 4.9, reference revision
+`56a66557245af14077678cd28a83ce3a337d9e2d`. Their checked revision requires SDK
+inputs. The [current toolchain repository](https://github.com/luka-dev/qnx65-armv7-toolchain)
+has since changed: it contains `sdp/`, advertises container-local sysroot/CRT,
+and offers GCC 4.9 and 8.5 builds without a separate external SDP installation.
+Its compiler hosts are Linux amd64 and output ARMv7 EABI5/base PCS softfp with
+`ldqnx.so.2`. Inspect/pin the revision actually used; current `main` must not be
+silently substituted for the older Audi recipe. No toolchain was downloaded,
+built or executed here yet. This corrects the earlier implication that a
+separately installed official SDK is the only build route.
+
+This Mac is Intel `x86_64`, macOS 15.7.9. Neither Docker nor Podman is installed.
+[Colima](https://colima.run/docs/getting-started/) plus Docker CLI is a candidate
+Linux-container host. Buildx is useful for the Audi build recipe. Keep the
+toolchain in its own image and use a named Colima profile rather than changing
+system compilers, shell startup files or existing Docker contexts.
+
+Homebrew's local index has no QNX compiler formula. Its Docker/Buildx formulae
+have no Intel bottle here and require source-build dependencies, including a
+newer Go than the installed version. Blindly installing them could therefore
+affect existing build dependencies. Prefer verified upstream Intel release
+binaries in a separate tools directory, or review the full dependency plan
+before a Homebrew installation. Homebrew package names alone are insufficient
+to promise an installation will preserve existing packages.
+
+The attempted Homebrew **dry run** stopped at unwritable Homebrew/cache paths
+under this session's filesystem restrictions. No package was installed,
+upgraded, unlinked or removed. Do not follow its blanket `chown` suggestion:
+this result does not establish an ownership problem outside the sandbox.
+
+Next: install/verify the container host without upgrading existing packages;
+pin and inspect the toolchain checkout; build its C-only image; compile a tiny
+ABI probe and the controlled renderer; inspect target imports and run mock
+tests under QNX/QEMU before the vehicle. No QNX 8 SDK or bare-metal Homebrew
+`arm-none-eabi-gcc` is selected as a replacement for the QNX 6.5 target runtime.
+[QNX ARMv7 options](https://www.qnx.com/developers/docs/6.5.0SP1/neutrino/technotes/QNX_for_ARMv7_Cortex_Processors.html)
+describe `gcc_ntoarmv7le`; [QNX dlopen documentation](https://www.qnx.com/developers/docs/6.5.0SP1.update/com.qnx.doc.neutrino_lib_ref/d/dlopen.html)
+places dynamic loading in libc, so an assumed Linux `-ldl` is unnecessary.
+
+## 14. Debian toolchain host established — 2026-10-25
+
+The owner's SSH alias `home` now hosts the toolchain under the requested
+`~/dev/pcm4-qnx-toolchain` directory. Docker is accessed through `sudo -n`,
+without changes to group membership, daemon configuration, host packages or
+existing containers. The host is Debian amd64 with eight CPUs and 23 GiB RAM;
+Docker's storage volume had over 100 GiB free. Home Assistant and OnlyOffice
+containers remained running during the build.
+
+Provenance:
+
+- Toolchain source revision: `baa45224f18ae6b13c2e9c77c6663bb8181eb6a1`.
+- Docker image: `pcm4-qnx65-armv7:8.5-baa45224f18a`.
+- Image ID: `sha256:6e05615103ef9062931c7503485d0bc335cfa5a744b7cfeb9cb39327074ae675`.
+- GCC 8.5.0, GNU assembler 2.38, C/C++ `base-env` stage. Go/Rust not built.
+- Pristine upstream checkout retained as `source/`; build context exported with
+  `git archive`, preserving SDK symlinks. Local changes limit GCC to four jobs,
+  assembler to two jobs, and enable five download retries. The first attempt
+  hit transient Debian snapshot connection resets; the retried build succeeded.
+  Upstream snapshot pinning, package verification and GNU archive hashes remain.
+
+`tools/setup_qnx_debian.sh` reproduces setup on that host. Logs/status are
+`setup.log`, `setup-first-attempt.log`, `setup.status`; the latter is `complete`.
+No separate QNX SDK installation or host apt installation was needed.
+
+`bash tools/build_pcm4_home.sh` transfers only original PCM4 source and mock
+tests, runs `tools/build_pcm4_qnx.sh` in the image, and retrieves outputs. The
+compile container runs as the login UID with a read-only root, temporary `/tmp`,
+no network and no extra capabilities. Firmware/vendor libraries stay on the
+Mac. The build uses C99, `-O0 -marm -mfloat-abi=softfp -static-libgcc`; native
+QNX/ARM/layout compile-time checks stay enabled, without `PCM4_HOST_TEST`.
+
+Successfully cross-compiled the controlled renderer, display/projection/binding
+mock tests and synthetic complete/missing-symbol libraries. The local driver is
+`controlled-test/bin/pcm4-render-test` (16 KiB, ignored by git), SHA-256:
+
+```text
+1f2cd12f089b7d77687e1b372adafdb788cf98f2ce84e058963ef1f87ddc99fd
+```
+
+`tools/check_qnx_target.py` checked this executable against extracted MU1476
+Stage-1 `proc/boot/libc.so.3`, SHA-256
+`455c05c655883792b745332d5a723965cc27954dfa5c4a2ea817492d97eaad5c`.
+Results: ELF32 little-endian ARM EABI5 executable; interpreter
+`/usr/lib/ldqnx.so.2`; sole direct dependency `libc.so.3`; **all 29 strong import
+names present**. Two weak frame-registration imports are reported separately.
+Reports, binary checksums and image provenance are under ignored
+`private/remote-qnx/` locally and `pcm4-project/qnx-out/` remotely.
+
+Four upstream static self-checks passed: VFP multiply-accumulate encodings,
+absence of recursive float math stubs in static/shared libstdc++, and a C++
+header/math/mutex/chrono compile probe. The script's extra per-variant loops
+were skipped because its generic image tags were not created; the explicit
+image above was tested. Log: `selftest.log` on the remote host.
+
+**Limits:** no target binary or mock test has executed under QNX/QEMU or in the
+vehicle. Import-name presence is not symbol-version, calling-convention or
+runtime proof. Output/layer/priority and Porsche HMI ownership are still
+unresolved; the collector remains the next on-car action. Do not interpret the
+presence of a compiled binary as approval to guess those parameters.
+
+## 15. Staged package and auxiliary/HMI integration status
+
+`controlled-test/TESTING.md` gives the ordered vehicle procedure: Stage 0 runs
+only original/synthetic QNX mock tests; Stage 1 collects topology/library
+evidence; Stage 2 is controlled real rendering after output/layer/geometry
+review; Stages 3/4 describe the pending receiver and live HMI tests.
+`tools/package_controlled_test.py` packages an explicit allowlist of 20 files
+plus a SHA256 manifest. Current archive is ignored
+`private/releases/pcm4-mu1476-controlled-test.zip`; binaries, synthetic libraries
+and the original sample are included. Results/vendor libraries are excluded.
+Archive CRC and per-file content checks passed. No on-unit stage has run yet.
+
+Original offline integration components now exist:
+
+- `native/pcm4_aux_stream.c/.h`: parses bounded avcC SPS/PPS configuration and
+  converts a complete, already-decrypted AVCC access unit into Annex-B. Waits
+  for IDR, prepends parameter sets at IDR, rejects stale session generations,
+  oversize/truncated NALs and unsupported configuration extensions. It does not
+  negotiate AirPlay, decrypt iPhone traffic or reconstruct TCP messages.
+- `native/pcm4_handover.c/.h`: policy callbacks acquire projection, show/hide
+  output and restore the latest stock context. Only terminal 1/nav contexts
+  72–77 can request takeover, with connected state and a recent accepted frame.
+  Other-page requests, disconnect and frame timeout release ownership. Failed
+  cleanup is retried; faults prevent immediate reacquisition. This is an
+  in-process policy core, not a live Java bridge or independent watchdog.
+- `native/pcm4_projection.c/.h`: connects conversion to the renderer and
+  handover policy through injected HMI callbacks. Malformed current-session
+  input ends the session and releases output; stale-session input cannot end
+  a newer session. Vendor timestamps remain a caller-adaptation requirement.
+
+`sh tools/test_pcm4_projection.sh` passed host sanitizer tests for framing,
+IDR/session isolation, ownership/restoration, clock regression, failure/retry
+behavior and integrated mock decode/show/restore. These tests also successfully
+cross-compiled for QNX, but have not executed on QNX. The compiled projection
+mock is included in Stage 0; no receiver preload or HMI patch is packaged.
+
+Next implementation boundaries: Porsche-specific receiver advertisement,
+SETUP/start/teardown hook and stock-AES adapter; bounded screen-message framing;
+negotiated geometry and actual timestamp semantics; then the post-KDK Porsche
+Java seam preserving stock listener/request state and higher-priority pages.
+A watchdog on the HMI side must restore stock even if the renderer process
+dies. Those target adapters remain unfinished; native policy tests cannot
+establish their correct behavior or make the live bridge operational.
+
+## 16. Screen receiver and Porsche HMI addon implementation — 2026-10-25
+
+This section supersedes section 15's unfinished framing/Java implementation
+items. It does not establish a live iPhone-to-cluster path.
+
+### Incremental native receiver
+
+`native/pcm4_screen_receiver.c/.h` now reconstructs stream-111 Screen messages
+across arbitrary fragmented or coalesced input. It bounds each body at 512000
+bytes, reads the 128-byte header and little-endian body length, passes plaintext
+avcC configuration into the projection core, and decrypts video bodies through
+an injected callback before AVCC conversion and NvSS decoding. Video before
+configuration still traverses the decrypt callback, preserving continuous
+cipher state; it cannot make the display ready. Invalid current-session input
+or a truncated final message ends projection; obsolete generations cannot
+terminate a newer session. Known control messages do not confer readiness.
+Vendor timestamp units remain unresolved, so the adapter currently submits
+zero, matching the controlled renderer rather than guessing a conversion.
+
+Host ASan/UBSan tests passed for single-byte fragmentation, coalesced messages,
+all 127 partial-header endings, pre-configuration crypto, malformed/oversize
+input, decrypt failure, session isolation, decode and context restoration.
+The crypto fixture is synthetic, not a test of Apple's actual encryption.
+The updated test also cross-compiled using the established QNX Docker toolchain
+on `home`; the Stage 0 projection mock was refreshed. No QNX execution occurred.
+There is still no live socket listener, stock AES binding/key interception,
+receiver advertisement or SETUP/teardown hook.
+
+### Actual Porsche Java patch built offline
+
+`hmi/src/local/pcm4/ProjectionBridge.java` implements selection at the actual
+Porsche post-KDK display-manager seam. `hmi/tools/PatchPorsche.java` checks the
+exact converted vendor class, inheritance, synchronized method and unique
+superclass call before emitting an addon. It saves the raw request on entry,
+preserves the listener, and restores through Porsche's normal method using the
+raw value so KDK mapping happens once. Terminal 1 navigation contexts 72–77 are
+the only takeover candidates; other pages retain control. A worker checks a
+bounded, fresh readiness marker independently of the renderer and serializes
+replay against stock requests. Missing configuration disables selection.
+A stock request for the candidate projection context stops ownership.
+
+The marker protocol is `PCM4READY1`, positive session generation and positive
+decoded-frame count, newline terminated. Freshness is three seconds. Its native
+publisher is not connected yet. The existing native handover callbacks and this
+Java worker are separately tested components: a single runtime coordinator must
+connect them without two competing context owners.
+
+The user-supplied JXE was converted privately on the authorized Debian host:
+
+- JXE SHA-256: `1eccb000da3ef57e35dec0d59e4b0be5df375b20b41457fcd53f9bca75307a88`.
+- jxe2jar revision: `9eeb45bbf14bf8afe3452c7be96a4d1f0206a286`;
+  30941 classes converted.
+- Input Porsche class SHA-256:
+  `551aab856826a16448c57a65705f5581f7e07aa3bab7823774351cbc56fbe0d3`.
+- Patched Porsche class SHA-256:
+  `75c081aa0bc67bbb0cacbc5dd8efb8ffae8d2c70e90ab9a4c59ea718e9ba58f1`.
+
+`tools/build_hmi_debian.sh` builds Java 1.4-target bridge classes inside pinned
+Java 8 Docker, checks input/dependency hashes, and creates a fresh private addon.
+Tests passed for default-disabled behavior, actual converted interfaces,
+non-idempotent raw/KDK remapping, listener preservation, automatic takeover,
+other-page precedence, stale/malformed/disabled markers and context collision.
+The patched Porsche class links under JVM verification without initializing OEM
+code. This proves neither J9 runtime compatibility nor installation viability.
+Latest remote build: `hmi-tools/builds/bridge.xfIPF0hr` under the existing workspace.
+Local addon and verification reports are under ignored
+`private/analysis/mu1476-hmi-bridge/`; vendor-derived classes are excluded from
+Git and the controlled-test ZIP.
+
+The extracted stock `eso/hmi/lsd/lsd.sh` offers loader leads: it appends JARs from
+`$BASE_DIR/lsd/jars`; development mode can use `hmi.zip` and launch the main class
+instead of the JXE. These are firmware observations, not proof that an addon
+will override the resident JXE class. Class precedence, context registration,
+startup and rollback remain to be validated before an installer is produced.
+
+### Independent firmware trace: display IDs are not hardware planes
+
+The requested agent recorded addresses, hashes and evidence in section 8 of
+`AUDI_PCM4_METHOD_COMPARISON.md`. NvSS's “layer” parameter selects a logical
+DSI displayable; physical hardware-plane properties are a separate interface.
+Factory enums include 33 `KOMBI_MAP_VIEW`, 58 `GOOGLE_EARTH_KOMBI_MAP_VIEW`,
+59 `EXTERNAL_SMARTPHONE`, and **60 `HUD_MAP_VIEW`**. Therefore Audi's hardcoded
+60 is not evidence that this identifier is globally free on Porsche. Porsche
+stock smartphone context 78 references displayables 16/59. The scanned static
+context tables did not allocate context 900, but dynamic allocation remains
+possible; 900 is a synthetic test value, not an approved vehicle setting.
+
+Output device 1 remains plausible but unproven. A traced driver reply maps
+internal type 1 to public type 1 and type 2 to public type 3. **Subsequent
+correction:** both the client and driver use devctl `0xc0140502`; the prior
+mismatch claim was an ARM immediate-decoding error, corrected in comparison
+section8.4. Enumeration-to-connector tracing continues.
+
+The intended path is a separate decoder surface/displayable in a projection
+context, replacing the active stock navigation composition temporarily. It does
+not redirect the stock decoder into a new buffer or overwrite the stock map
+framebuffer. A stock surface can obscure the new one if its composition remains
+active above it; logical ID 60 alone cannot establish plane ordering. Correct
+context registration and on-car visibility tests are still required.
+
+Next: confirm collected device/layer/context identities; connect the native
+readiness publisher to the Java owner; implement and review the Porsche-specific
+receiver/AES lifecycle; validate J9 addon loading and controlled installation.
+Actual negotiated geometry, warning priority, decode latency, timeout restoration
+and output visibility still require vehicle evidence. Native arrows and speed
+limits remain follow-on work on the separate guidance path.
+
+## 17. Routing requirements and graphics model — 2026-10-25
+
+For the next display milestone, distinguish logical contexts/displayables from
+physical outputs/planes. The stock context map has been recovered; finding more
+context names alone will not establish the NvSS-to-LVDS route.
+
+The current public Audi MU1438 runtime uses fixed output 1, priority 100,
+displayable 60, context 900 and 1440×540 at 30 fps. It declares the context using
+`dmdt dc 900 60`; renderer readiness is communicated through a RAM-file heartbeat.
+The Java bridge handles terminal 1/navigation contexts 72–77 and changes context
+while that heartbeat is fresh. This is a fixed target profile rather than
+startup topology discovery. Sources:
+
+- https://github.com/aberbic/Audi-MHI2-Virtual-Cockpit-Altscreen-CarPlay-AndroidAuto/blob/main/carplay/src/native/cluster_runtime.c
+- https://github.com/aberbic/Audi-MHI2-Virtual-Cockpit-Altscreen-CarPlay-AndroidAuto/blob/main/hmi/src/local/mu1438/ClusterGate.java
+
+Porsche requirements and outstanding evidence:
+
+1. Resolve the active output route end-to-end: NvSS output -> NvMedia/TVMR/NvDC
+   identity -> selected display driver/head -> TFTLCD0/second LVDS. Continue
+   static tracing of driver selection/loading, including the EFS variant.
+   The earlier devctl mismatch was a decoding error and is now corrected;
+   it is no longer a blocker.
+2. Establish a usable logical displayable and priority. ID 60 is factory-named
+   HUD_MAP_VIEW, and absence from Porsche's literal context lists does not prove
+   that it has no dynamic owner. Trace native registration/validation and
+   priority handling; preserve factory registrations.
+3. Verify the Porsche `dmdt dc` declaration path and native context semantics,
+   including where contexts live and whether any cleanup/reset is required.
+   Context 900 is a candidate only. No declaration command has run on the car.
+4. Select source/destination rectangles from recovered 448×448 transport and
+   Porsche layout evidence, then confirm actual clipping. Panel geometry and
+   an iPhone safe area are separate quantities.
+5. Connect renderer readiness and Java ownership, preserving raw KDK requests,
+   listener state and non-navigation pages. This can be tested first with the
+   synthetic video source without waiting for iPhone session interception.
+
+Logical graphics model (an abstraction, not a proven call-by-call native stack):
+producers render/decode into pixel surfaces; streams are associated with logical
+displayables; DisplayManager contexts select displayables for a terminal/output;
+KD/NVIDIA composition routes eligible surfaces to available hardware planes;
+the display controller scans out to a physical connector and panel. Control
+(context changes) and pixel data (surface buffers) are separate paths. Some
+surfaces may be scanned out as hardware overlays without copying into a single
+combined CPU framebuffer. Exact composition/plane assignment remains unproved.
+Java terminal 1 -> internal display ID 4 is proven from bytecode; the physical
+TFTLCD0 association is conditional configuration evidence; NvSS output 1 is not
+yet linked conclusively to that route.
+
+A read-only runtime collection can replace broad probing by identifying the
+actual topology, contexts, streams and component hashes. A subsequent short
+synthetic-video test is still needed to establish visible scanout, clipping,
+priority and restoration. Firmware analysis can reduce these tests but cannot
+prove the owner's current coding, loaded variants or physical panel behavior.
+
+## 18. Selected projection identities — 2026-10-25
+
+Owner decision: follow the Audi separate-surface method using logical
+**displayable60 in projection context900**. Porsche's native factory name table
+already defines60 as HUD_MAP_VIEW. Context900 is our added composition; it is
+not claimed to be a stock Porsche declaration. This decision supersedes earlier
+statements that no displayable/context has been selected. Runtime ownership and
+visibility have not yet been tested.
+
+Both `profiles/pcm4-mu1476-display.json` and the controlled-test reference profile
+now select renderer.layer=60 and ownership.context=900 with displayables[60].
+The HMI launch setting is explicitly `-Dpcm4.cluster.context=900`; the bridge
+continues to default to disabled. Context declaration and readiness coordination
+still need implementation before this becomes a live handover.
+
+The completed native investigation in `NVSS_OUTPUT_CONTEXT_TRACE_MU1476.md`
+traces the Porsche448x448 LCD mode to **NvSS output0**, unlike Audi output1.
+It follows boot mode records into driver objects and enumeration, then through
+NvDC/TVMR/NvMedia. This is an offline-proven mapping conditional on the Porsche
+mode profile being active. The conditional route records output0; the executable
+renderer output remains unspecified pending the active topology check.
+No vehicle action or automatic rendering has been enabled by this selection.
 
 ## Local unattended continuation (superseded)
 
