@@ -1,0 +1,7 @@
+# Local vendor firmware and vehicle backups used for offline analysis.
+/private/
+/MHI2_US_POG11_K5186_MU1476.7z
+/MHI2_US_POG11_K5186_1_MU1476_AIO_20220723.7z
+/MHI2_US_POG11_P3300_MU0809_PATCH/
+.DS_Store
+__pycache__/
