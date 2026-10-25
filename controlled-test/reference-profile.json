@@ -1,0 +1,61 @@
+{
+  "profile": "pcm4-pog11-mu1476-display-research-v1",
+  "status": "offline-development",
+  "firmware": "MHI2_US_POG11_K5186_1 / MU1476 supplied AIO reference",
+  "vehicle_runtime_verified": false,
+  "development_target": "MU1476; owner plans to upgrade before on-car validation",
+  "wireless": false,
+  "nvss_sha256": "58d19e127e77b0973149fe83d7c44fd973fd76ab57fb99108c9e76d3f73f5430",
+  "kd_sha256": "d44df0bb660b2dbcec8f2b52af45c2450fcfb93501d00481e22b675b55cb6cb3",
+  "nvmedia_sha256": "2ef0bec48e063e9a71bcae0f724365898059b6ad7eb5ea0c30b11df0970f9d5f",
+  "tvmr_sha256": "ba854f58db4190da47f41638df761feb74510d2bd3f77293da90f0df7de5991e",
+  "nvdc_sha256": "3385097792315eee4dcdc706210704353bd598bf2fa3b515719cc2f0a32bcfe7",
+  "boot_initializer_sha256": "368fff98a3ac2d18d0cc38ee779792385dc04560b62a08233e53c5a3cf0d088e",
+  "transport_raster_candidate": {"width": 448, "height": 448},
+  "hmi_geometry_evidence": {
+    "provider": "de/audi/app/navi/porsche/map/gui/layout/LayoutProviderPAGMainKombi",
+    "screen": {"width": 448, "height": 448},
+    "navigation_visible_area": {"x": 60, "y": 30, "width": 348, "height": 368},
+    "scope": "Static Porsche FPK layout branch; not yet selected as CarPlay safe area or video destination"
+  },
+  "conditional_display_route": {
+    "configuration": "2_lvds",
+    "terminal_name": "2nd_lvds",
+    "driver_terminal": "Tegra:TFTLCD0",
+    "display_manager_id": 4
+  },
+  "renderer": {
+    "nvss_output_device": null,
+    "layer": null,
+    "priority": null,
+    "stream_type": 0,
+    "visibility_setter": {"update_flag_offset": 60, "value_offset": 61, "show_value": 0, "hide_value": 1, "runtime_verified": false},
+    "open_word_at_20": 0,
+    "coded_width": null,
+    "coded_height": null,
+    "fps": null,
+    "destination_rect": null,
+    "maximum_access_unit_bytes": 512000
+  },
+  "ownership": {
+    "evidence": "Static MU1476 HMI bytecode; runtime untested",
+    "java_terminal": 1,
+    "context": null,
+    "stock_navigation_contexts": [72, 73, 74, 75, 76, 77],
+    "hmi_class": "de/audi/tghu/fwhmi/porsche/DisplayManagerMIB2PorscheHigh",
+    "switch_method_descriptor": "(IILde/audi/atip/hmi/view/IDisplayListener;)V",
+    "switch_method_rom_offset": "0x1d4d380",
+    "hook_before_super_call_pc": 42,
+    "stock_context_displayables": {
+      "72": [33], "73": [22], "74": [22, 33],
+      "75": [], "76": [58], "77": [22, 58]
+    }
+  },
+  "carplay": {"safe_area": null, "physical_width_mm": null, "physical_height_mm": null},
+  "blockers": [
+    "Read active display topology and map viewport; do not equate display-manager ID with NvSS output device.",
+    "Trace Porsche HMI ownership and select an unused layer/context.",
+    "Verify visibility and kd stream-property behavior before connecting the renderer to live output.",
+    "Build and verify with the QNX ARM toolchain; only host mock tests exist so far."
+  ]
+}

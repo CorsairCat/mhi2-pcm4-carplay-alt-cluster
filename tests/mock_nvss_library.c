@@ -13,7 +13,11 @@ int NvSSVideoStreamConfigure(void *handle, const struct pcm4_nv_config *config)
 int NvSSVideoGetAttribs(void *handle, void *attributes)
 { (void)handle; memset(attributes, 0, 64); return 0; }
 int NvSSVideoSetAttribs(void *handle, const void *attributes)
-{ (void)handle; return ((const unsigned char *)attributes)[8] == 1 ? 0 : -9; }
+{
+    const unsigned char *p = attributes;
+    if (handle != &object) return -9;
+    return (p[8] == 1 || (p[60] == 1 && p[61] <= 1)) ? 0 : -9;
+}
 int NvSSVideoDecode(void *handle, const struct pcm4_nv_input *input, int flags)
 { (void)handle; (void)flags; return input->length ? 0 : -9; }
 #ifndef PCM4_MOCK_MISSING_CLOSE

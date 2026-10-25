@@ -535,6 +535,38 @@ establish the active map model/layout; implement the Porsche HMI ownership bridg
 with current-stock-request caching and restoration. The new visibility API is
 one component of that handover, not a replacement for the bridge.
 
+## 12. Controlled-test delivery folder
+
+`controlled-test/` contains a self-contained source snapshot, QNX build script,
+read-only on-unit collector, host-side identity checker and original sample
+generator. `controlled-test/README.md` is the deployment and evidence procedure.
+The supplied sample is generated locally under ignored `media/`; no vendor code
+or firmware is redistributed. The bounded driver validates the full PC4T input
+before binding NvSS, plays at most five seconds of source frames, requests hide
+on exit, closes and unloads. API success is not proof of visible output. A vendor
+call can block beyond the source duration; signal cleanup runs between calls.
+Timestamp units remain unresolved, so test inputs use zero vendor timestamps.
+
+**Delivery status:** collection is runnable with existing QNX shell access.
+Rendering remains blocked on compatible QNX ARM32 SDK/build verification,
+on-unit library identity, output/layer/priority resolution and ownership review.
+The confirmation argument is only an operator assertion. There is no automatic
+installer, startup change, chosen HMI context or tested vehicle binary.
+
+The local Homebrew index has no QNX compiler formula. Existing Apple Clang,
+Homebrew GCC and ffmpeg are present; no Homebrew packages were changed. Ordinary
+ARM code generation does not supply QNX headers, startup objects or libc. The
+[official QNX SDK 8 installation requirements](https://www.qnx.com/developers/docs/8.0/com.qnx.doc.qnxsdp.quickstart/topic/install_host.html)
+require a licensed account and Linux/Windows host; current SDK availability does
+not establish compatibility with this older PCM4 runtime. Select a compatible
+SDK only after checking target runtime/ABI requirements.
+
+Validation: `sh tools/test_controlled_kit.sh` compares canonical/snapshot source
+and profile, generates 20 complete Annex-B access units, exercises full playback
+and cleanup with a synthetic dynamic library under sanitizers, and rejects
+trailing data and unsupported output IDs. Existing renderer tests and the
+hash-pinned static audit also pass. No vendor library was executed.
+
 ## Local unattended continuation (superseded)
 
 `sh tools/codex_pcm4.sh ...` starts a CLI session with
